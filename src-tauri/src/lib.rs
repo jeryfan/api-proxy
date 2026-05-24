@@ -1,3 +1,5 @@
+mod config;
+
 use tauri::Manager;
 
 pub fn run() {
