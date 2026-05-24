@@ -1,4 +1,5 @@
 mod config;
+mod proxy;
 
 use tauri::Manager;
 
