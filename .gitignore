@@ -1,0 +1,12 @@
+node_modules
+dist
+dist-ssr
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+*.log
+.env
+.env.local
+# rust
+src-tauri/target
+*.swp
