@@ -1,5 +1,7 @@
 mod config;
+mod events;
 mod proxy;
+mod state;
 
 use tauri::Manager;
 
