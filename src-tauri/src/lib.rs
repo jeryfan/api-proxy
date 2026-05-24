@@ -1,7 +1,7 @@
 mod commands;
-mod config;
+pub mod config;
 mod events;
-mod proxy;
+pub mod proxy;
 mod state;
 mod tray;
 
