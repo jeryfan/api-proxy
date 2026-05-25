@@ -55,6 +55,8 @@ pub struct GlobalConfig {
     pub theme: String,
     pub close_to_tray: bool,
     pub auto_start_server: bool,
+    #[serde(default)]
+    pub proxy_url: String,
 }
 
 impl Default for GlobalConfig {
@@ -66,6 +68,7 @@ impl Default for GlobalConfig {
             theme: "system".into(),
             close_to_tray: true,
             auto_start_server: true,
+            proxy_url: String::new(),
         }
     }
 }
