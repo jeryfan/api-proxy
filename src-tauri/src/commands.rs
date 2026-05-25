@@ -181,3 +181,133 @@ fn open_path(path: &std::path::Path) -> Result<(), String> {
         .map_err(|e| e.to_string())?;
     Ok(())
 }
+
+use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
+use std::time::{Duration, Instant};
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProxyTestResult {
+    pub success: bool,
+    pub latency_ms: u64,
+    pub error: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DetectedProxy {
+    pub url: String,
+    pub proxy_type: String,
+    pub port: u16,
+}
+
+#[tauri::command]
+pub fn get_global_proxy_url(state: State<'_, AppState>) -> String {
+    state.store.global().proxy_url
+}
+
+#[tauri::command]
+pub async fn set_global_proxy_url(
+    app: AppHandle<Wry>,
+    state: State<'_, AppState>,
+    url: String,
+) -> Result<(), String> {
+    let trimmed = url.trim().to_string();
+    let opt = if trimmed.is_empty() {
+        None
+    } else {
+        Some(trimmed.as_str())
+    };
+    crate::proxy::http_client::validate_proxy(opt)?;
+
+    let mut g = state.store.global();
+    g.proxy_url = trimmed.clone();
+    state.store.save_global(&app, g)?;
+
+    crate::proxy::http_client::apply_proxy(opt)?;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn test_proxy_url(url: String) -> Result<ProxyTestResult, String> {
+    if url.trim().is_empty() {
+        return Err("代理 URL 为空".into());
+    }
+
+    let start = Instant::now();
+
+    let proxy = reqwest::Proxy::all(&url).map_err(|e| format!("代理 URL 无效：{e}"))?;
+    let client = reqwest::Client::builder()
+        .proxy(proxy)
+        .timeout(Duration::from_secs(10))
+        .connect_timeout(Duration::from_secs(10))
+        .build()
+        .map_err(|e| format!("构造测试客户端失败：{e}"))?;
+
+    let test_urls = [
+        "https://httpbin.org/get",
+        "https://www.google.com",
+        "https://api.anthropic.com",
+    ];
+
+    let mut last_error: Option<String> = None;
+    for target in test_urls {
+        match client.head(target).send().await {
+            Ok(_) => {
+                return Ok(ProxyTestResult {
+                    success: true,
+                    latency_ms: start.elapsed().as_millis() as u64,
+                    error: None,
+                });
+            }
+            Err(e) => {
+                last_error = Some(e.to_string());
+            }
+        }
+    }
+
+    Ok(ProxyTestResult {
+        success: false,
+        latency_ms: start.elapsed().as_millis() as u64,
+        error: last_error,
+    })
+}
+
+const SCAN_PORTS: &[(u16, &str, bool)] = &[
+    (7890, "http", true),     // Clash mixed
+    (7891, "socks5", false),  // Clash socks
+    (1080, "socks5", false),
+    (8080, "http", false),
+    (8888, "http", false),
+    (3128, "http", false),
+    (10808, "socks5", false), // V2Ray socks
+    (10809, "http", false),   // V2Ray http
+];
+
+#[tauri::command]
+pub async fn scan_local_proxies() -> Vec<DetectedProxy> {
+    tokio::task::spawn_blocking(|| {
+        let mut found = Vec::new();
+        for &(port, primary, is_mixed) in SCAN_PORTS {
+            let addr = SocketAddrV4::new(Ipv4Addr::LOCALHOST, port);
+            if TcpStream::connect_timeout(&addr.into(), Duration::from_millis(150)).is_ok() {
+                found.push(DetectedProxy {
+                    url: format!("{primary}://127.0.0.1:{port}"),
+                    proxy_type: primary.into(),
+                    port,
+                });
+                if is_mixed {
+                    let alt = if primary == "http" { "socks5" } else { "http" };
+                    found.push(DetectedProxy {
+                        url: format!("{alt}://127.0.0.1:{port}"),
+                        proxy_type: alt.into(),
+                        port,
+                    });
+                }
+            }
+        }
+        found
+    })
+    .await
+    .unwrap_or_default()
+}

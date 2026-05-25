@@ -36,6 +36,10 @@ pub fn run() {
             commands::start_server,
             commands::stop_server,
             commands::open_config_dir,
+            commands::get_global_proxy_url,
+            commands::set_global_proxy_url,
+            commands::test_proxy_url,
+            commands::scan_local_proxies,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
