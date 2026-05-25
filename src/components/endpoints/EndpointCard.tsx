@@ -19,7 +19,11 @@ export function EndpointCard({
   listenPort,
   onEdit,
 }: Props) {
-  const localUrl = `http://${listenAddress}:${listenPort}${endpoint.path}`;
+  const clientHost =
+    listenAddress === "0.0.0.0" || listenAddress === "::" || !listenAddress
+      ? "127.0.0.1"
+      : listenAddress;
+  const localUrl = `http://${clientHost}:${listenPort}${endpoint.path}`;
   const showInactive = endpoint.enabled && !serverRunning;
   return (
     <div

@@ -88,7 +88,7 @@ export default function App() {
         style={{ top: DRAG_BAR, height: HEADER_H }}
       >
         <div className="flex h-full items-center justify-between gap-2 px-6">
-          <div className="flex items-center gap-2" data-tauri-no-drag>
+          <div className="flex items-center gap-2">
             <BrandLogo className="h-7 w-7" />
             <span className="text-xl font-semibold text-blue-500 dark:text-blue-400">
               API 代理
@@ -102,9 +102,9 @@ export default function App() {
             >
               <SettingsIcon className="h-4 w-4" />
             </Button>
-          </div>
-          <div className="flex items-center gap-3" data-tauri-no-drag>
             <ServerToggle status={status} />
+          </div>
+          <div className="flex items-center gap-3">
             <Button
               onClick={() => setShowAdd(true)}
               size="icon"
