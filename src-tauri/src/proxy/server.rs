@@ -22,13 +22,8 @@ pub async fn spawn_server(
     port: u16,
     routes: Arc<ArcSwap<Vec<Endpoint>>>,
     timeout: Arc<AtomicU64>,
-    client: reqwest::Client,
 ) -> Result<RunningServer, String> {
-    let state = ProxyState {
-        routes,
-        client,
-        timeout,
-    };
+    let state = ProxyState { routes, timeout };
     let app: Router = Router::new()
         .fallback(any(proxy_handler))
         .with_state(state);

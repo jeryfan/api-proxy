@@ -10,7 +10,6 @@ use crate::proxy::server::{spawn_server, RunningServer};
 pub struct ProxyManager {
     routes: Arc<ArcSwap<Vec<Endpoint>>>,
     timeout: Arc<AtomicU64>,
-    client: reqwest::Client,
     state: Mutex<Inner>,
 }
 
@@ -22,14 +21,9 @@ struct Inner {
 
 impl ProxyManager {
     pub fn new(routes: Vec<Endpoint>, timeout_secs: u64) -> Self {
-        let client = reqwest::Client::builder()
-            .pool_idle_timeout(Some(std::time::Duration::from_secs(90)))
-            .build()
-            .expect("build reqwest client");
         Self {
             routes: Arc::new(ArcSwap::from_pointee(routes)),
             timeout: Arc::new(AtomicU64::new(timeout_secs)),
-            client,
             state: Mutex::new(Inner {
                 running: None,
                 started_at: None,
@@ -75,8 +69,7 @@ impl ProxyManager {
         }
         let routes = self.routes.clone();
         let timeout = self.timeout.clone();
-        let client = self.client.clone();
-        let server = match spawn_server(address, port, routes, timeout, client).await {
+        let server = match spawn_server(address, port, routes, timeout).await {
             Ok(s) => s,
             Err(e) => {
                 self.set_last_error(Some(e.clone()));

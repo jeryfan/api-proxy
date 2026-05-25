@@ -17,7 +17,6 @@ use crate::proxy::transform;
 #[derive(Clone)]
 pub struct ProxyState {
     pub routes: Arc<ArcSwap<Vec<Endpoint>>>,
-    pub client: reqwest::Client,
     pub timeout: Arc<std::sync::atomic::AtomicU64>,
 }
 
@@ -95,8 +94,8 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
             }
         };
 
-    let mut req_builder = state
-        .client
+    let client = crate::proxy::http_client::get();
+    let mut req_builder = client
         .request(method, upstream_url.clone())
         .timeout(Duration::from_secs(timeout_secs))
         .headers(reqwest_headers(&headers));

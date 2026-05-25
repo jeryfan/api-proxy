@@ -65,12 +65,13 @@ fn ep(path: &str, upstream: &str, body_merge: &str) -> Endpoint {
 
 #[tokio::test]
 async fn forwards_basic_get() {
+    let _ = apiproxy_lib::proxy::http_client::init(None);
     let (upstream_addr, _u) = fake_upstream().await;
     let upstream = format!("http://{}/v1", upstream_addr);
     let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
     let timeout = Arc::new(AtomicU64::new(10));
     let client = reqwest::Client::new();
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, client)
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
         .await
         .unwrap();
     let url = format!("http://{}:{}/cc/hello", server.address, server.port);
@@ -80,12 +81,14 @@ async fn forwards_basic_get() {
     assert_eq!(json["method"], "GET");
     assert_eq!(json["path"], "/v1/hello");
 
+    let _ = client;
     let _ = server.shutdown.send(());
     server.join.await.ok();
 }
 
 #[tokio::test]
 async fn forwards_post_with_body_merge_and_header() {
+    let _ = apiproxy_lib::proxy::http_client::init(None);
     let (upstream_addr, _u) = fake_upstream().await;
     let upstream = format!("http://{}/v1", upstream_addr);
     let mut endpoint = ep("/cc", &upstream, r#"{"model":"x"}"#);
@@ -97,7 +100,7 @@ async fn forwards_post_with_body_merge_and_header() {
     let routes = Arc::new(ArcSwap::from_pointee(vec![endpoint]));
     let timeout = Arc::new(AtomicU64::new(10));
     let client = reqwest::Client::new();
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, client.clone())
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
         .await
         .unwrap();
     let url = format!("http://{}:{}/cc/chat", server.address, server.port);
@@ -122,17 +125,12 @@ async fn forwards_post_with_body_merge_and_header() {
 
 #[tokio::test]
 async fn returns_404_when_no_match() {
+    let _ = apiproxy_lib::proxy::http_client::init(None);
     let routes: Arc<ArcSwap<Vec<Endpoint>>> = Arc::new(ArcSwap::from_pointee(vec![]));
     let timeout = Arc::new(AtomicU64::new(5));
-    let server = spawn_server(
-        "127.0.0.1".into(),
-        0,
-        routes,
-        timeout,
-        reqwest::Client::new(),
-    )
-    .await
-    .unwrap();
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+        .await
+        .unwrap();
     let url = format!("http://{}:{}/missing", server.address, server.port);
     let resp = reqwest::get(&url).await.unwrap();
     assert_eq!(resp.status(), 404);
@@ -142,6 +140,7 @@ async fn returns_404_when_no_match() {
 
 #[tokio::test]
 async fn upstream_timeout_returns_502() {
+    let _ = apiproxy_lib::proxy::http_client::init(None);
     use axum::routing::any;
     use axum::Router;
 
@@ -158,15 +157,9 @@ async fn upstream_timeout_returns_502() {
     let upstream = format!("http://{}", upstream_addr);
     let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
     let timeout = Arc::new(AtomicU64::new(1));
-    let server = spawn_server(
-        "127.0.0.1".into(),
-        0,
-        routes,
-        timeout,
-        reqwest::Client::new(),
-    )
-    .await
-    .unwrap();
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+        .await
+        .unwrap();
     let url = format!("http://{}:{}/cc/slow", server.address, server.port);
     let resp = reqwest::get(&url).await.unwrap();
     assert_eq!(resp.status(), 502);
