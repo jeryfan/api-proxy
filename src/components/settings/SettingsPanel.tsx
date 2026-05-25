@@ -18,6 +18,7 @@ import {
 import { api } from "@/lib/api";
 import { globalConfigSchema } from "@/lib/schemas";
 import type { GlobalConfig } from "@/types";
+import { GlobalProxySettings } from "./GlobalProxySettings";
 
 interface Props {
   open: boolean;
@@ -128,6 +129,8 @@ export function SettingsPanel({ open, global, onClose, onSaved }: Props) {
             </div>
           </div>
         </section>
+
+        <GlobalProxySettings />
 
         <section className="rounded-xl border p-4 space-y-4">
           <Label className="text-base font-semibold">行为</Label>
