@@ -5,14 +5,13 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { ModeToggle } from "@/components/mode-toggle";
 import { useTheme } from "@/components/theme-provider";
 import { api, EVENTS } from "@/lib/api";
 import { isMac } from "@/lib/platform";
 import type { Endpoint, GlobalConfig, ServerStatus } from "@/types";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { ServerToggle } from "@/components/ServerToggle";
-import { ServerStatusBadge } from "@/components/ServerStatusBadge";
 import { EndpointList } from "@/components/endpoints/EndpointList";
 import { AddEndpointDialog } from "@/components/endpoints/AddEndpointDialog";
 import { EditEndpointDialog } from "@/components/endpoints/EditEndpointDialog";
@@ -40,7 +39,9 @@ export default function App() {
 
   React.useEffect(() => {
     refresh().catch((e) => toast.error(`初始化失败：${e}`));
-    getCurrentWindow().show().catch(() => undefined);
+    getCurrentWindow()
+      .show()
+      .catch(() => undefined);
   }, [refresh]);
 
   React.useEffect(() => {
@@ -87,7 +88,8 @@ export default function App() {
         style={{ top: DRAG_BAR, height: HEADER_H }}
       >
         <div className="flex h-full items-center justify-between gap-2 px-6">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2" data-tauri-no-drag>
+            <BrandLogo className="h-7 w-7" />
             <span className="text-xl font-semibold text-blue-500 dark:text-blue-400">
               API 代理
             </span>
@@ -96,22 +98,19 @@ export default function App() {
               size="icon"
               className="h-8 w-8"
               onClick={() => setShowSettings(true)}
-              data-tauri-no-drag
               title="设置"
             >
               <SettingsIcon className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex items-center gap-3" data-tauri-no-drag>
-            <ServerStatusBadge status={status} />
             <ServerToggle status={status} />
-            <ModeToggle />
             <Button
               onClick={() => setShowAdd(true)}
               size="icon"
-              className="ml-2"
+              className="ml-2 bg-orange-500 hover:bg-orange-600 dark:bg-orange-500 dark:hover:bg-orange-600 text-white shadow-lg shadow-orange-500/30 dark:shadow-orange-500/40 rounded-full w-8 h-8"
             >
-              <Plus className="h-5 w-5" />
+              <Plus className="w-5 h-5" />
             </Button>
           </div>
         </div>

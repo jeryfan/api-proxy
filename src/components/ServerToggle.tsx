@@ -19,10 +19,16 @@ export function ServerToggle({ status }: { status: ServerStatus }) {
       );
     }
   };
+
+  const tooltip = status.running
+    ? `运行中 ${status.listenAddress}:${status.listenPort}`
+    : "已停止";
+
   return (
-    <div className="flex items-center gap-2">
-      <span className="text-xs text-muted-foreground">服务</span>
-      <Switch checked={status.running} onCheckedChange={handleChange} />
-    </div>
+    <Switch
+      checked={status.running}
+      onCheckedChange={handleChange}
+      title={tooltip}
+    />
   );
 }
