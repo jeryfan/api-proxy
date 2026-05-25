@@ -71,10 +71,12 @@
     outline: 2px solid hsl(var(--ring));
     outline-offset: 2px;
   }
-  [data-tauri-drag-region] {
+  [data-tauri-drag-region],
+  [data-tauri-drag-region] * {
     -webkit-app-region: drag;
   }
   [data-tauri-no-drag],
+  [data-tauri-no-drag] *,
   button,
   input,
   select,

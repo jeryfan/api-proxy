@@ -1,7 +1,6 @@
 import * as React from "react";
 import { Copy, Pause, Pencil, Play, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { api } from "@/lib/api";
@@ -9,14 +8,14 @@ import type { Endpoint } from "@/types";
 
 interface Props {
   endpoint: Endpoint;
-  localUrl: string;
   onEdit: () => void;
 }
 
 const iconBtn = "h-8 w-8 p-1";
 
-export function EndpointActions({ endpoint, localUrl, onEdit }: Props) {
+export function EndpointActions({ endpoint, onEdit }: Props) {
   const [pendingDelete, setPendingDelete] = React.useState(false);
+  const [duplicating, setDuplicating] = React.useState(false);
 
   const toggle = async () => {
     try {
@@ -29,9 +28,26 @@ export function EndpointActions({ endpoint, localUrl, onEdit }: Props) {
     }
   };
 
-  const copy = async () => {
-    await writeText(localUrl);
-    toast.success("已复制");
+  const duplicate = async () => {
+    if (duplicating) return;
+    setDuplicating(true);
+    try {
+      await api.saveEndpoint({
+        ...endpoint,
+        id: "",
+        name: `${endpoint.name} 副本`,
+        enabled: false,
+        createdAt: 0,
+        updatedAt: 0,
+      });
+      toast.success("已复制端点（已停用，请编辑后启用）");
+    } catch (e: unknown) {
+      toast.error(
+        typeof e === "string" ? e : (e as Error)?.message ?? "复制失败",
+      );
+    } finally {
+      setDuplicating(false);
+    }
   };
 
   const remove = async () => {
@@ -65,8 +81,9 @@ export function EndpointActions({ endpoint, localUrl, onEdit }: Props) {
         variant="ghost"
         size="icon"
         className={iconBtn}
-        onClick={copy}
-        title="复制 URL"
+        onClick={duplicate}
+        disabled={duplicating}
+        title="复制端点"
       >
         <Copy className="h-4 w-4" />
       </Button>

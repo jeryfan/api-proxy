@@ -7,23 +7,10 @@ import { EndpointActions } from "./EndpointActions";
 interface Props {
   endpoint: Endpoint;
   serverRunning: boolean;
-  listenAddress: string;
-  listenPort: number;
   onEdit: () => void;
 }
 
-export function EndpointCard({
-  endpoint,
-  serverRunning,
-  listenAddress,
-  listenPort,
-  onEdit,
-}: Props) {
-  const clientHost =
-    listenAddress === "0.0.0.0" || listenAddress === "::" || !listenAddress
-      ? "127.0.0.1"
-      : listenAddress;
-  const localUrl = `http://${clientHost}:${listenPort}${endpoint.path}`;
+export function EndpointCard({ endpoint, serverRunning, onEdit }: Props) {
   const showInactive = endpoint.enabled && !serverRunning;
   return (
     <div
@@ -84,11 +71,7 @@ export function EndpointCard({
             "transition-opacity duration-200",
           )}
         >
-          <EndpointActions
-            endpoint={endpoint}
-            localUrl={localUrl}
-            onEdit={onEdit}
-          />
+          <EndpointActions endpoint={endpoint} onEdit={onEdit} />
         </div>
       </div>
     </div>

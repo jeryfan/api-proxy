@@ -120,8 +120,6 @@ export default function App() {
         <EndpointList
           endpoints={endpoints}
           status={status}
-          listenAddress={status.listenAddress ?? global.listenAddress}
-          listenPort={status.listenPort ?? global.listenPort}
           onEdit={setEditing}
           onAdd={() => setShowAdd(true)}
         />
