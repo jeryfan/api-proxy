@@ -1,5 +1,12 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Endpoint, GlobalConfig, InitPayload, ServerStatus } from "@/types";
+import type {
+  DetectedProxy,
+  Endpoint,
+  GlobalConfig,
+  InitPayload,
+  ProxyTestResult,
+  ServerStatus,
+} from "@/types";
 
 export const api = {
   initData: () => invoke<InitPayload>("init_data"),
@@ -16,6 +23,12 @@ export const api = {
   startServer: () => invoke<ServerStatus>("start_server"),
   stopServer: () => invoke<ServerStatus>("stop_server"),
   openConfigDir: () => invoke<void>("open_config_dir"),
+  getGlobalProxyUrl: () => invoke<string>("get_global_proxy_url"),
+  setGlobalProxyUrl: (url: string) =>
+    invoke<void>("set_global_proxy_url", { url }),
+  testProxyUrl: (url: string) =>
+    invoke<ProxyTestResult>("test_proxy_url", { url }),
+  scanLocalProxies: () => invoke<DetectedProxy[]>("scan_local_proxies"),
 };
 
 export const EVENTS = {

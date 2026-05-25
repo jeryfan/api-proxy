@@ -28,6 +28,7 @@ export interface GlobalConfig {
   theme: "light" | "dark" | "system";
   closeToTray: boolean;
   autoStartServer: boolean;
+  proxyUrl: string;
 }
 
 export interface ServerStatus {
@@ -42,4 +43,16 @@ export interface InitPayload {
   global: GlobalConfig;
   endpoints: Endpoint[];
   status: ServerStatus;
+}
+
+export interface ProxyTestResult {
+  success: boolean;
+  latencyMs: number;
+  error?: string;
+}
+
+export interface DetectedProxy {
+  url: string;
+  proxyType: string;
+  port: number;
 }
