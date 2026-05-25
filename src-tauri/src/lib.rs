@@ -43,6 +43,12 @@ pub fn run() {
                 anyhow::anyhow!(e)
             })?);
             let g = store.global();
+            crate::proxy::http_client::init(if g.proxy_url.is_empty() {
+                None
+            } else {
+                Some(g.proxy_url.as_str())
+            })
+            .map_err(|e| anyhow::anyhow!(e))?;
             let manager = Arc::new(ProxyManager::new(store.endpoints(), g.request_timeout_secs));
             app.manage(AppState {
                 store: store.clone(),
