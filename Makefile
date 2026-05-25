@@ -18,8 +18,6 @@ help:
 	@echo "  make clean-all  清理产物 + node_modules"
 
 dev-setup:
-	@command -v pnpm >/dev/null 2>&1 || { echo "✗ pnpm 未安装（请自行准备 Node 22+ 与 pnpm）"; exit 1; }
-	@command -v cargo >/dev/null 2>&1 || { echo "✗ cargo 未安装（请自行准备 Rust 工具链）"; exit 1; }
 	@echo "→ 安装前端依赖..."
 	pnpm install
 	@echo "→ 拉取 Rust 依赖..."
