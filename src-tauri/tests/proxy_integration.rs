@@ -55,6 +55,7 @@ fn ep(path: &str, upstream: &str, body_merge: &str) -> Endpoint {
         path: path.into(),
         upstream_url: upstream.into(),
         strip_prefix: true,
+        fixed_upstream: false,
         header_rules: vec![],
         query_rules: vec![],
         body_merge: body_merge.into(),

@@ -30,6 +30,7 @@ function makeDefault(initial?: Endpoint): TForm {
     path: initial?.path ?? "/",
     upstreamUrl: initial?.upstreamUrl ?? "",
     stripPrefix: initial?.stripPrefix ?? true,
+    fixedUpstream: initial?.fixedUpstream ?? false,
     headerRules: initial?.headerRules ?? [],
     queryRules: initial?.queryRules ?? [],
     bodyMerge: initial?.bodyMerge ?? "",
@@ -126,24 +127,51 @@ export function EndpointForm({ initial, formId, onSubmit }: Props) {
               </p>
             )}
           </div>
-          <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
-            <div>
-              <Label className="text-sm font-medium">剥离路径前缀</Label>
-              <p className="text-xs text-muted-foreground">
-                开启：/cc/x → 上游 /x；关闭：/cc/x → 上游 /cc/x
-              </p>
-            </div>
-            <Controller
-              control={control}
-              name="stripPrefix"
-              render={({ field }) => (
+          <Controller
+            control={control}
+            name="fixedUpstream"
+            render={({ field }) => (
+              <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
+                <div>
+                  <Label className="text-sm font-medium">固定上游地址</Label>
+                  <p className="text-xs text-muted-foreground">
+                    开启后忽略请求子路径，所有请求都打到上游地址原样。
+                    例：/codex/responses → https://api.kimi.com/coding/v1/chat/completions
+                  </p>
+                </div>
                 <Switch
                   checked={field.value}
                   onCheckedChange={field.onChange}
                 />
-              )}
-            />
-          </div>
+              </div>
+            )}
+          />
+          <Controller
+            control={control}
+            name="stripPrefix"
+            render={({ field: stripField }) => (
+              <Controller
+                control={control}
+                name="fixedUpstream"
+                render={({ field: fixedField }) => (
+                  <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
+                    <div>
+                      <Label className="text-sm font-medium">剥离路径前缀</Label>
+                      <p className="text-xs text-muted-foreground">
+                        开启：/cc/x → 上游 /x；关闭：/cc/x → 上游 /cc/x。
+                        固定上游地址开启时本项无效。
+                      </p>
+                    </div>
+                    <Switch
+                      checked={stripField.value}
+                      onCheckedChange={stripField.onChange}
+                      disabled={fixedField.value}
+                    />
+                  </div>
+                )}
+              />
+            )}
+          />
         </section>
 
         <section className="rounded-xl border p-4 space-y-3">

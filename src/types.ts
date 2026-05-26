@@ -21,6 +21,7 @@ export interface Endpoint {
   path: string;
   upstreamUrl: string;
   stripPrefix: boolean;
+  fixedUpstream: boolean;
   headerRules: Rule[];
   queryRules: Rule[];
   bodyMerge: string;

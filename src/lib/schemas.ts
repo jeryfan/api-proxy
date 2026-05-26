@@ -34,6 +34,7 @@ export const endpointFormSchema = z.object({
       "仅支持 http/https",
     ),
   stripPrefix: z.boolean(),
+  fixedUpstream: z.boolean(),
   headerRules: z.array(ruleSchema),
   queryRules: z.array(ruleSchema),
   bodyMerge: z

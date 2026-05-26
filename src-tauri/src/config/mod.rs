@@ -33,6 +33,8 @@ pub struct Endpoint {
     #[serde(default = "default_true")]
     pub strip_prefix: bool,
     #[serde(default)]
+    pub fixed_upstream: bool,
+    #[serde(default)]
     pub header_rules: Vec<Rule>,
     #[serde(default)]
     pub query_rules: Vec<Rule>,
@@ -186,6 +188,7 @@ mod tests {
             path: path.into(),
             upstream_url: "https://example.com".into(),
             strip_prefix: true,
+            fixed_upstream: false,
             header_rules: vec![],
             query_rules: vec![],
             body_merge: "".into(),

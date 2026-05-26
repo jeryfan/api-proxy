@@ -31,8 +31,16 @@ pub fn build_upstream_url(
     req_path: &str,
     req_query: Option<&str>,
 ) -> Result<Url, TransformError> {
-    let base = Url::parse(&endpoint.upstream_url)
+    let mut url = Url::parse(&endpoint.upstream_url)
         .map_err(|e| TransformError::InvalidUpstream(e.to_string()))?;
+
+    if endpoint.fixed_upstream {
+        if let Some(q) = req_query {
+            url.set_query(Some(q));
+        }
+        return Ok(url);
+    }
+
     let remaining = if endpoint.strip_prefix {
         let stripped = req_path.strip_prefix(&endpoint.path).unwrap_or(req_path);
         if stripped.is_empty() {
@@ -43,7 +51,6 @@ pub fn build_upstream_url(
     } else {
         req_path
     };
-    let mut url = base.clone();
     if !remaining.is_empty() {
         let base_path = url.path().trim_end_matches('/').to_string();
         let suffix = remaining.trim_start_matches('/');
@@ -188,6 +195,7 @@ mod tests {
             path: path.into(),
             upstream_url: upstream.into(),
             strip_prefix: strip,
+            fixed_upstream: false,
             header_rules: vec![],
             query_rules: vec![],
             body_merge: "".into(),
@@ -260,6 +268,33 @@ mod tests {
         let e = ep("/cc", "https://api.example.com/v1", true);
         let url = build_upstream_url(&e, "/cc/x", Some("a=1&b=2")).unwrap();
         assert_eq!(url.as_str(), "https://api.example.com/v1/x?a=1&b=2");
+    }
+
+    #[test]
+    fn build_url_fixed_upstream_ignores_path() {
+        let mut e = ep("/codex", "https://api.kimi.com/coding/v1/chat/completions", true);
+        e.fixed_upstream = true;
+        let url = build_upstream_url(&e, "/codex/responses", None).unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://api.kimi.com/coding/v1/chat/completions"
+        );
+        let url = build_upstream_url(&e, "/codex/anything/else", None).unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://api.kimi.com/coding/v1/chat/completions"
+        );
+    }
+
+    #[test]
+    fn build_url_fixed_upstream_keeps_query() {
+        let mut e = ep("/codex", "https://api.kimi.com/coding/v1/chat/completions", true);
+        e.fixed_upstream = true;
+        let url = build_upstream_url(&e, "/codex/responses", Some("stream=true")).unwrap();
+        assert_eq!(
+            url.as_str(),
+            "https://api.kimi.com/coding/v1/chat/completions?stream=true"
+        );
     }
 
     #[test]
