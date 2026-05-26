@@ -59,6 +59,7 @@ fn ep(path: &str, upstream: &str, body_merge: &str) -> Endpoint {
         query_rules: vec![],
         body_merge: body_merge.into(),
         sort_index: 0,
+        api_format: apiproxy_lib::proxy::format::ApiFormat::Passthrough,
         created_at: 0,
         updated_at: 0,
     }

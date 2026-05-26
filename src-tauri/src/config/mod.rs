@@ -40,6 +40,8 @@ pub struct Endpoint {
     pub body_merge: String,
     #[serde(default)]
     pub sort_index: i32,
+    #[serde(default)]
+    pub api_format: crate::proxy::format::ApiFormat,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -188,6 +190,7 @@ mod tests {
             query_rules: vec![],
             body_merge: "".into(),
             sort_index: 0,
+            api_format: crate::proxy::format::ApiFormat::Passthrough,
             created_at: 0,
             updated_at: 0,
         }

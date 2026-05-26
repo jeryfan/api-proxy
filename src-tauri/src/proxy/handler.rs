@@ -18,6 +18,7 @@ use tracing::error;
 
 use crate::config::Endpoint;
 use crate::events;
+use crate::proxy::format::{self, ApiFormat};
 use crate::proxy::log_store::{
     encode_body, is_binary_content_type, HeaderEntry, LogStore, RequestLog,
 };
@@ -208,6 +209,41 @@ pub async fn proxy_handler(
         BodyData::Empty => Vec::new(),
         BodyData::Bytes(b) => b.clone(),
     };
+
+    // Format conversion on the upstream-bound body.
+    let (upstream_body_bytes, body_data) = if endpoint.api_format.needs_conversion() {
+        match format::transform_request(endpoint.api_format, &upstream_body_bytes) {
+            Ok(converted) => {
+                headers.insert(
+                    http::header::CONTENT_TYPE,
+                    HeaderValue::from_static("application/json"),
+                );
+                headers.insert(
+                    http::header::CONTENT_LENGTH,
+                    HeaderValue::from_str(&converted.len().to_string()).unwrap(),
+                );
+                let data = if converted.is_empty() {
+                    BodyData::Empty
+                } else {
+                    BodyData::Bytes(converted.clone())
+                };
+                (converted, data)
+            }
+            Err(msg) => {
+                log.error = Some(msg.clone());
+                finalize_log(&state, log, started);
+                return json_error(
+                    StatusCode::BAD_REQUEST,
+                    &msg,
+                    "FORMAT_TRANSFORM_FAILED",
+                    Some(&endpoint.path),
+                    None,
+                );
+            }
+        }
+    } else {
+        (upstream_body_bytes, body_data)
+    };
     {
         let (b64, len) = encode_body(&upstream_body_bytes);
         log.upstream_body_b64 = b64;
@@ -277,12 +313,82 @@ pub async fn proxy_handler(
         .map(|c| is_binary_content_type(c))
         .unwrap_or(false);
     log.resp_body_binary = skip_resp_body;
+    let is_sse_response = content_type
+        .as_deref()
+        .map(|c| c.contains("text/event-stream"))
+        .unwrap_or(false);
+
+    let api_format = endpoint.api_format;
+    let convert_response = api_format.needs_conversion();
+
+    // Decide response stream: passthrough vs streaming-convert vs buffered-convert.
+    let response_stream: std::pin::Pin<
+        Box<dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send>,
+    > = if !convert_response {
+        Box::pin(
+            upstream_response
+                .bytes_stream()
+                .map(|r| r.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))),
+        )
+    } else if is_sse_response {
+        // Streaming format conversion.
+        resp_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("text/event-stream"),
+        );
+        resp_headers.remove(http::header::CONTENT_LENGTH);
+        log.resp_headers = header_entries(&resp_headers);
+        log.resp_content_type = Some("text/event-stream".into());
+        crate::proxy::format::wrap_response_stream(api_format, upstream_response.bytes_stream())
+    } else {
+        // Non-SSE: buffer upstream body, transform once, return as a single chunk.
+        let raw_bytes = match upstream_response.bytes().await {
+            Ok(b) => b.to_vec(),
+            Err(e) => {
+                log.error = Some(format!("upstream stream error: {e}"));
+                finalize_log(&state, log, started);
+                return json_error(
+                    StatusCode::BAD_GATEWAY,
+                    &e.to_string(),
+                    "UPSTREAM_ERROR",
+                    Some(&endpoint.path),
+                    Some(&endpoint.upstream_url),
+                );
+            }
+        };
+        let converted = match crate::proxy::format::transform_response_json(api_format, &raw_bytes)
+        {
+            Ok(b) => b,
+            Err(msg) => {
+                log.error = Some(format!("response transform failed: {msg}"));
+                finalize_log(&state, log, started);
+                return json_error(
+                    StatusCode::BAD_GATEWAY,
+                    &msg,
+                    "RESP_TRANSFORM_FAILED",
+                    Some(&endpoint.path),
+                    Some(&endpoint.upstream_url),
+                );
+            }
+        };
+        if let Ok(v) = HeaderValue::from_str(&converted.len().to_string()) {
+            resp_headers.insert(http::header::CONTENT_LENGTH, v);
+        }
+        resp_headers.insert(
+            http::header::CONTENT_TYPE,
+            HeaderValue::from_static("application/json"),
+        );
+        log.resp_headers = header_entries(&resp_headers);
+        log.resp_content_type = Some("application/json".into());
+        let chunk = Bytes::from(converted);
+        Box::pin(futures::stream::once(async move { Ok(chunk) }))
+    };
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(16);
     let log_state = state.clone();
     let log_started = started;
     let mut prelog = log;
-    let mut upstream_stream = upstream_response.bytes_stream();
+    let mut upstream_stream = response_stream;
 
     tokio::spawn(async move {
         let mut buf: Vec<u8> = Vec::new();

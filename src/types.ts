@@ -1,5 +1,12 @@
 export type RuleAction = "set" | "add" | "remove";
 
+export type ApiFormat =
+  | "passthrough"
+  | "anthropicToOpenaiChat"
+  | "anthropicToOpenaiResponses"
+  | "anthropicToGemini"
+  | "responsesToOpenaiChat";
+
 export interface Rule {
   action: RuleAction;
   key: string;
@@ -18,6 +25,7 @@ export interface Endpoint {
   queryRules: Rule[];
   bodyMerge: string;
   sortIndex: number;
+  apiFormat: ApiFormat;
   createdAt: number;
   updatedAt: number;
 }

@@ -8,6 +8,14 @@ export const ruleSchema = z.object({
   value: z.string(),
 });
 
+export const apiFormatSchema = z.enum([
+  "passthrough",
+  "anthropicToOpenaiChat",
+  "anthropicToOpenaiResponses",
+  "anthropicToGemini",
+  "responsesToOpenaiChat",
+]);
+
 export const endpointFormSchema = z.object({
   id: z.string(),
   name: z.string().min(1, "名称必填").max(60, "名称不超过 60 字符"),
@@ -39,6 +47,7 @@ export const endpointFormSchema = z.object({
         return false;
       }
     }, "必须为合法的 JSON 对象"),
+  apiFormat: apiFormatSchema,
 });
 
 export type EndpointForm = z.infer<typeof endpointFormSchema>;

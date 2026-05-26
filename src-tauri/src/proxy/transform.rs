@@ -192,6 +192,7 @@ mod tests {
             query_rules: vec![],
             body_merge: "".into(),
             sort_index: 0,
+            api_format: crate::proxy::format::ApiFormat::Passthrough,
             created_at: 0,
             updated_at: 0,
         }
