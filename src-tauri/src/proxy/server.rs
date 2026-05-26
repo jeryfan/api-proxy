@@ -5,10 +5,12 @@ use std::sync::Arc;
 use arc_swap::ArcSwap;
 use axum::routing::any;
 use axum::Router;
+use tauri::{AppHandle, Wry};
 use tokio::sync::oneshot;
 
 use crate::config::Endpoint;
 use crate::proxy::handler::{proxy_handler, ProxyState};
+use crate::proxy::log_store::LogStore;
 
 pub struct RunningServer {
     pub address: String,
@@ -22,8 +24,15 @@ pub async fn spawn_server(
     port: u16,
     routes: Arc<ArcSwap<Vec<Endpoint>>>,
     timeout: Arc<AtomicU64>,
+    log_store: Arc<LogStore>,
+    app_handle: Option<AppHandle<Wry>>,
 ) -> Result<RunningServer, String> {
-    let state = ProxyState { routes, timeout };
+    let state = ProxyState {
+        routes,
+        timeout,
+        log_store,
+        app_handle,
+    };
     let app: Router = Router::new()
         .fallback(any(proxy_handler))
         .with_state(state);
@@ -39,11 +48,14 @@ pub async fn spawn_server(
 
     let (tx, rx) = oneshot::channel::<()>();
     let join = tokio::spawn(async move {
-        let _ = axum::serve(listener, app)
-            .with_graceful_shutdown(async move {
-                let _ = rx.await;
-            })
-            .await;
+        let _ = axum::serve(
+            listener,
+            app.into_make_service_with_connect_info::<SocketAddr>(),
+        )
+        .with_graceful_shutdown(async move {
+            let _ = rx.await;
+        })
+        .await;
     });
 
     Ok(RunningServer {

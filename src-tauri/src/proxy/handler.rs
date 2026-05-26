@@ -1,28 +1,110 @@
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use arc_swap::ArcSwap;
 use axum::body::{Body, Bytes};
-use axum::extract::{Request, State};
+use axum::extract::{ConnectInfo, Request, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode};
 use axum::response::{IntoResponse, Response};
-use futures_util::TryStreamExt;
+use chrono::Utc;
+use futures_util::StreamExt;
 use http::header::HOST;
 use serde_json::json;
+use std::net::SocketAddr;
+use tauri::{AppHandle, Emitter, Wry};
+use tokio::sync::mpsc;
+use tokio_stream::wrappers::ReceiverStream;
 use tracing::error;
 
 use crate::config::Endpoint;
+use crate::events;
+use crate::proxy::log_store::{
+    encode_body, is_binary_content_type, HeaderEntry, LogStore, RequestLog, BODY_LIMIT_BYTES,
+};
 use crate::proxy::transform;
 
 #[derive(Clone)]
 pub struct ProxyState {
     pub routes: Arc<ArcSwap<Vec<Endpoint>>>,
     pub timeout: Arc<std::sync::atomic::AtomicU64>,
+    pub log_store: Arc<LogStore>,
+    pub app_handle: Option<AppHandle<Wry>>,
 }
 
-pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Response {
+fn header_entries(headers: &HeaderMap) -> Vec<HeaderEntry> {
+    headers
+        .iter()
+        .map(|(k, v)| HeaderEntry {
+            key: k.as_str().to_string(),
+            value: v.to_str().unwrap_or("").to_string(),
+        })
+        .collect()
+}
+
+fn content_type_of(headers: &HeaderMap) -> Option<String> {
+    headers
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+}
+
+fn make_log_skeleton(
+    endpoint: &Endpoint,
+    req_path: &str,
+    req_query: &Option<String>,
+    client_addr: Option<String>,
+    req_headers: &HeaderMap,
+    req_method: &str,
+) -> RequestLog {
+    RequestLog {
+        id: uuid::Uuid::new_v4().to_string(),
+        endpoint_id: endpoint.id.clone(),
+        endpoint_name: endpoint.name.clone(),
+        started_at: Utc::now().timestamp_millis(),
+        client_addr,
+        req_method: req_method.to_string(),
+        req_path: req_path.to_string(),
+        req_query: req_query.clone(),
+        req_headers: header_entries(req_headers),
+        req_body_b64: String::new(),
+        req_body_len: 0,
+        req_body_truncated: false,
+        req_body_binary: false,
+        upstream_url: endpoint.upstream_url.clone(),
+        upstream_headers: vec![],
+        upstream_body_b64: String::new(),
+        upstream_body_len: 0,
+        upstream_body_truncated: false,
+        status_code: None,
+        resp_headers: vec![],
+        resp_body_b64: String::new(),
+        resp_body_len: 0,
+        resp_body_truncated: false,
+        resp_body_binary: false,
+        resp_content_type: None,
+        duration_ms: 0,
+        error: None,
+    }
+}
+
+fn finalize_log(state: &ProxyState, mut log: RequestLog, started: Instant) {
+    log.duration_ms = started.elapsed().as_millis() as u64;
+    state.log_store.push(log.clone());
+    if let Some(handle) = &state.app_handle {
+        let _ = handle.emit(events::LOG_RECORDED, &log);
+    }
+}
+
+pub async fn proxy_handler(
+    State(state): State<ProxyState>,
+    ConnectInfo(addr): ConnectInfo<SocketAddr>,
+    req: Request,
+) -> Response {
+    let started = Instant::now();
     let req_path = req.uri().path().to_string();
     let req_query = req.uri().query().map(|s| s.to_string());
+    let req_method = req.method().as_str().to_string();
+    let client_addr = Some(addr.to_string());
     let routes = state.routes.load_full();
 
     let endpoint = match transform::match_endpoint(&routes, &req_path) {
@@ -38,10 +120,21 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
         }
     };
 
+    let mut log = make_log_skeleton(
+        &endpoint,
+        &req_path,
+        &req_query,
+        client_addr.clone(),
+        req.headers(),
+        &req_method,
+    );
+
     let mut upstream_url =
         match transform::build_upstream_url(&endpoint, &req_path, req_query.as_deref()) {
             Ok(u) => u,
             Err(e) => {
+                log.error = Some(e.to_string());
+                finalize_log(&state, log, started);
                 return json_error(
                     StatusCode::BAD_GATEWAY,
                     &e.to_string(),
@@ -52,6 +145,7 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
             }
         };
     transform::apply_query_rules(&mut upstream_url, &endpoint.query_rules);
+    log.upstream_url = upstream_url.to_string();
 
     let (parts, body) = req.into_parts();
     let mut headers = parts.headers.clone();
@@ -66,6 +160,8 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
         }
     }
     if let Err(e) = transform::apply_header_rules(&mut headers, &endpoint.header_rules) {
+        log.error = Some(e.to_string());
+        finalize_log(&state, log, started);
         return json_error(
             StatusCode::BAD_REQUEST,
             &e.to_string(),
@@ -80,10 +176,16 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
     let timeout_secs = state.timeout.load(std::sync::atomic::Ordering::Relaxed);
 
     let mut warn_body_merge_skipped = false;
+    let raw_request_body: Vec<u8>;
     let body_data: BodyData =
         match prepare_body(body, &mut headers, &endpoint, &mut warn_body_merge_skipped).await {
-            Ok(b) => b,
+            Ok((data, raw)) => {
+                raw_request_body = raw;
+                data
+            }
             Err(msg) => {
+                log.error = Some(msg.clone());
+                finalize_log(&state, log, started);
                 return json_error(
                     StatusCode::BAD_REQUEST,
                     &msg,
@@ -93,6 +195,30 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
                 );
             }
         };
+
+    {
+        let (b64, len, trunc) = encode_body(&raw_request_body);
+        log.req_body_b64 = b64;
+        log.req_body_len = len;
+        log.req_body_truncated = trunc;
+        log.req_body_binary = log
+            .req_headers
+            .iter()
+            .find(|h| h.key.eq_ignore_ascii_case("content-type"))
+            .map(|h| is_binary_content_type(&h.value))
+            .unwrap_or(false);
+    }
+    let upstream_body_bytes: Vec<u8> = match &body_data {
+        BodyData::Empty => Vec::new(),
+        BodyData::Bytes(b) => b.clone(),
+    };
+    {
+        let (b64, len, trunc) = encode_body(&upstream_body_bytes);
+        log.upstream_body_b64 = b64;
+        log.upstream_body_len = len;
+        log.upstream_body_truncated = trunc;
+        log.upstream_headers = header_entries(&headers);
+    }
 
     let client = crate::proxy::http_client::get();
     let mut req_builder = client
@@ -116,6 +242,8 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
             } else {
                 "UPSTREAM_ERROR"
             };
+            log.error = Some(format!("{code}: {e}"));
+            finalize_log(&state, log, started);
             return json_error(
                 StatusCode::BAD_GATEWAY,
                 &e.to_string(),
@@ -128,6 +256,8 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
 
     let status = StatusCode::from_u16(upstream_response.status().as_u16())
         .unwrap_or(StatusCode::BAD_GATEWAY);
+    log.status_code = Some(status.as_u16());
+
     let mut resp_headers = HeaderMap::new();
     for (k, v) in upstream_response.headers() {
         if let (Ok(name), Ok(value)) = (
@@ -144,13 +274,63 @@ pub async fn proxy_handler(State(state): State<ProxyState>, req: Request) -> Res
             HeaderValue::from_static("body-merge-skipped"),
         );
     }
+    log.resp_headers = header_entries(&resp_headers);
+    let content_type = content_type_of(&resp_headers);
+    log.resp_content_type = content_type.clone();
+    let skip_resp_body = content_type
+        .as_deref()
+        .map(|c| is_binary_content_type(c))
+        .unwrap_or(false);
+    log.resp_body_binary = skip_resp_body;
 
-    let stream = upstream_response
-        .bytes_stream()
-        .map_ok(Bytes::from)
-        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e));
-    let body = Body::from_stream(stream);
+    let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(16);
+    let log_state = state.clone();
+    let log_started = started;
+    let mut prelog = log;
+    let mut upstream_stream = upstream_response.bytes_stream();
 
+    tokio::spawn(async move {
+        let mut buf: Vec<u8> = Vec::new();
+        let mut truncated = false;
+        while let Some(chunk_result) = upstream_stream.next().await {
+            match chunk_result {
+                Ok(chunk) => {
+                    let bytes = Bytes::from(chunk);
+                    if !skip_resp_body && !truncated {
+                        let remaining = BODY_LIMIT_BYTES.saturating_sub(buf.len());
+                        if remaining == 0 {
+                            truncated = true;
+                        } else if bytes.len() <= remaining {
+                            buf.extend_from_slice(&bytes);
+                        } else {
+                            buf.extend_from_slice(&bytes[..remaining]);
+                            truncated = true;
+                        }
+                    }
+                    if tx.send(Ok(bytes)).await.is_err() {
+                        break;
+                    }
+                }
+                Err(e) => {
+                    let msg = e.to_string();
+                    prelog.error = Some(msg.clone());
+                    let _ = tx
+                        .send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)))
+                        .await;
+                    break;
+                }
+            }
+        }
+        if !skip_resp_body {
+            let (b64, len, trunc) = encode_body(&buf);
+            prelog.resp_body_b64 = b64;
+            prelog.resp_body_len = len;
+            prelog.resp_body_truncated = trunc || truncated;
+        }
+        finalize_log(&log_state, prelog, log_started);
+    });
+
+    let body = Body::from_stream(ReceiverStream::new(rx));
     let mut response = Response::builder().status(status);
     if let Some(h) = response.headers_mut() {
         *h = resp_headers;
@@ -168,50 +348,49 @@ async fn prepare_body(
     headers: &mut HeaderMap,
     endpoint: &Endpoint,
     warn: &mut bool,
-) -> Result<BodyData, String> {
+) -> Result<(BodyData, Vec<u8>), String> {
     use http_body_util::BodyExt;
+    let collected = body.collect().await.map_err(|e| e.to_string())?;
+    let raw = collected.to_bytes().to_vec();
+
     if endpoint.body_merge.is_empty() {
-        let collected = body.collect().await.map_err(|e| e.to_string())?;
-        let bytes = collected.to_bytes();
-        if bytes.is_empty() {
-            Ok(BodyData::Empty)
-        } else {
-            headers.remove(http::header::CONTENT_LENGTH);
-            Ok(BodyData::Bytes(bytes.to_vec()))
+        if raw.is_empty() {
+            return Ok((BodyData::Empty, raw));
         }
-    } else {
-        let collected = body.collect().await.map_err(|e| e.to_string())?;
-        let bytes = collected.to_bytes();
-        let patch: serde_json::Value = serde_json::from_str(&endpoint.body_merge)
-            .map_err(|e| format!("body_merge 解析失败：{e}"))?;
-        let content_type = headers
-            .get(http::header::CONTENT_TYPE)
-            .and_then(|v| v.to_str().ok())
-            .unwrap_or("")
-            .to_string();
-        let is_json = content_type.contains("application/json") || bytes.is_empty();
-        if !is_json {
+        headers.remove(http::header::CONTENT_LENGTH);
+        let bytes = raw.clone();
+        return Ok((BodyData::Bytes(bytes), raw));
+    }
+
+    let patch: serde_json::Value = serde_json::from_str(&endpoint.body_merge)
+        .map_err(|e| format!("body_merge 解析失败：{e}"))?;
+    let content_type = headers
+        .get(http::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .unwrap_or("")
+        .to_string();
+    let is_json = content_type.contains("application/json") || raw.is_empty();
+    if !is_json {
+        *warn = true;
+        headers.remove(http::header::CONTENT_LENGTH);
+        return Ok((BodyData::Bytes(raw.clone()), raw));
+    }
+    match transform::merge_json_body(&raw, &patch) {
+        Ok(merged) => {
+            headers.insert(
+                http::header::CONTENT_TYPE,
+                HeaderValue::from_static("application/json"),
+            );
+            headers.insert(
+                http::header::CONTENT_LENGTH,
+                HeaderValue::from_str(&merged.len().to_string()).unwrap(),
+            );
+            Ok((BodyData::Bytes(merged), raw))
+        }
+        Err(_) => {
             *warn = true;
             headers.remove(http::header::CONTENT_LENGTH);
-            return Ok(BodyData::Bytes(bytes.to_vec()));
-        }
-        match transform::merge_json_body(&bytes, &patch) {
-            Ok(merged) => {
-                headers.insert(
-                    http::header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/json"),
-                );
-                headers.insert(
-                    http::header::CONTENT_LENGTH,
-                    HeaderValue::from_str(&merged.len().to_string()).unwrap(),
-                );
-                Ok(BodyData::Bytes(merged))
-            }
-            Err(_) => {
-                *warn = true;
-                headers.remove(http::header::CONTENT_LENGTH);
-                Ok(BodyData::Bytes(bytes.to_vec()))
-            }
+            Ok((BodyData::Bytes(raw.clone()), raw))
         }
     }
 }

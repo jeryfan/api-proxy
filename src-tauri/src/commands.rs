@@ -154,7 +154,7 @@ pub async fn apply_global_config(
     let status = if must_restart {
         state
             .manager
-            .restart(new.listen_address.clone(), new.listen_port)
+            .restart(new.listen_address.clone(), new.listen_port, app.clone())
             .await?
     } else {
         state.manager.status()
@@ -174,7 +174,10 @@ pub async fn start_server(
     state: State<'_, AppState>,
 ) -> Result<ServerStatus, String> {
     let g = state.store.global();
-    let status = state.manager.start(g.listen_address, g.listen_port).await?;
+    let status = state
+        .manager
+        .start(g.listen_address, g.listen_port, app.clone())
+        .await?;
     let _ = app.emit(events::STATUS_CHANGED, &status);
     Ok(status)
 }
@@ -338,4 +341,26 @@ pub async fn scan_local_proxies() -> Vec<DetectedProxy> {
     })
     .await
     .unwrap_or_default()
+}
+
+#[tauri::command]
+pub fn list_request_logs(
+    state: State<'_, AppState>,
+    endpoint_id: Option<String>,
+    limit: Option<usize>,
+) -> Vec<crate::proxy::log_store::RequestLog> {
+    state.log_store.list(endpoint_id.as_deref(), limit)
+}
+
+#[tauri::command]
+pub fn get_request_log(
+    state: State<'_, AppState>,
+    id: String,
+) -> Option<crate::proxy::log_store::RequestLog> {
+    state.log_store.get(&id)
+}
+
+#[tauri::command]
+pub fn clear_request_logs(state: State<'_, AppState>, endpoint_id: Option<String>) {
+    state.log_store.clear(endpoint_id.as_deref());
 }

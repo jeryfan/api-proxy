@@ -72,7 +72,7 @@ async fn forwards_basic_get() {
     let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
     let timeout = Arc::new(AtomicU64::new(10));
     let client = reqwest::Client::new();
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await
         .unwrap();
     let url = format!("http://{}:{}/cc/hello", server.address, server.port);
@@ -101,7 +101,7 @@ async fn forwards_post_with_body_merge_and_header() {
     let routes = Arc::new(ArcSwap::from_pointee(vec![endpoint]));
     let timeout = Arc::new(AtomicU64::new(10));
     let client = reqwest::Client::new();
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await
         .unwrap();
     let url = format!("http://{}:{}/cc/chat", server.address, server.port);
@@ -129,7 +129,7 @@ async fn returns_404_when_no_match() {
     let _ = apiproxy_lib::proxy::http_client::init(None);
     let routes: Arc<ArcSwap<Vec<Endpoint>>> = Arc::new(ArcSwap::from_pointee(vec![]));
     let timeout = Arc::new(AtomicU64::new(5));
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await
         .unwrap();
     let url = format!("http://{}:{}/missing", server.address, server.port);
@@ -158,7 +158,7 @@ async fn upstream_timeout_returns_502() {
     let upstream = format!("http://{}", upstream_addr);
     let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
     let timeout = Arc::new(AtomicU64::new(1));
-    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout)
+    let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await
         .unwrap();
     let url = format!("http://{}:{}/cc/slow", server.address, server.port);

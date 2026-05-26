@@ -3,13 +3,16 @@ use std::sync::{Arc, Mutex};
 
 use arc_swap::ArcSwap;
 use chrono::Utc;
+use tauri::{AppHandle, Wry};
 
 use crate::config::{Endpoint, ServerStatus};
+use crate::proxy::log_store::LogStore;
 use crate::proxy::server::{spawn_server, RunningServer};
 
 pub struct ProxyManager {
     routes: Arc<ArcSwap<Vec<Endpoint>>>,
     timeout: Arc<AtomicU64>,
+    log_store: Arc<LogStore>,
     state: Mutex<Inner>,
 }
 
@@ -20,10 +23,11 @@ struct Inner {
 }
 
 impl ProxyManager {
-    pub fn new(routes: Vec<Endpoint>, timeout_secs: u64) -> Self {
+    pub fn new(routes: Vec<Endpoint>, timeout_secs: u64, log_store: Arc<LogStore>) -> Self {
         Self {
             routes: Arc::new(ArcSwap::from_pointee(routes)),
             timeout: Arc::new(AtomicU64::new(timeout_secs)),
+            log_store,
             state: Mutex::new(Inner {
                 running: None,
                 started_at: None,
@@ -60,7 +64,12 @@ impl ProxyManager {
         }
     }
 
-    pub async fn start(&self, address: String, port: u16) -> Result<ServerStatus, String> {
+    pub async fn start(
+        &self,
+        address: String,
+        port: u16,
+        app_handle: AppHandle<Wry>,
+    ) -> Result<ServerStatus, String> {
         {
             let inner = self.state.lock().unwrap();
             if inner.running.is_some() {
@@ -69,13 +78,15 @@ impl ProxyManager {
         }
         let routes = self.routes.clone();
         let timeout = self.timeout.clone();
-        let server = match spawn_server(address, port, routes, timeout).await {
-            Ok(s) => s,
-            Err(e) => {
-                self.set_last_error(Some(e.clone()));
-                return Err(e);
-            }
-        };
+        let log_store = self.log_store.clone();
+        let server =
+            match spawn_server(address, port, routes, timeout, log_store, Some(app_handle)).await {
+                Ok(s) => s,
+                Err(e) => {
+                    self.set_last_error(Some(e.clone()));
+                    return Err(e);
+                }
+            };
         {
             let mut inner = self.state.lock().unwrap();
             inner.running = Some(server);
@@ -98,9 +109,14 @@ impl ProxyManager {
         Ok(self.status())
     }
 
-    pub async fn restart(&self, address: String, port: u16) -> Result<ServerStatus, String> {
+    pub async fn restart(
+        &self,
+        address: String,
+        port: u16,
+        app_handle: AppHandle<Wry>,
+    ) -> Result<ServerStatus, String> {
         self.stop().await?;
-        self.start(address, port).await
+        self.start(address, port, app_handle).await
     }
 
     fn set_last_error(&self, msg: Option<String>) {

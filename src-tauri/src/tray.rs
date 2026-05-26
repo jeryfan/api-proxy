@@ -49,7 +49,9 @@ pub fn build_tray(app: &AppHandle<Wry>) -> tauri::Result<()> {
                         manager.stop().await
                     } else {
                         let g = state.store.global();
-                        manager.start(g.listen_address, g.listen_port).await
+                        manager
+                            .start(g.listen_address, g.listen_port, app_clone.clone())
+                            .await
                     };
                     if let Ok(s) = status {
                         let _ = app_clone.emit(events::STATUS_CHANGED, &s);

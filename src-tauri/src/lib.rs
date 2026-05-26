@@ -10,8 +10,11 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager, RunEvent, WindowEvent};
 
 use crate::config::store::ConfigStore;
+use crate::proxy::log_store::LogStore;
 use crate::proxy::manager::ProxyManager;
 use crate::state::AppState;
+
+const LOG_BUFFER_CAPACITY: usize = 200;
 
 pub fn run() {
     tauri::Builder::default()
@@ -41,12 +44,13 @@ pub fn run() {
             commands::set_global_proxy_url,
             commands::test_proxy_url,
             commands::scan_local_proxies,
+            commands::list_request_logs,
+            commands::get_request_log,
+            commands::clear_request_logs,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let store = Arc::new(ConfigStore::load(&handle).map_err(|e| {
-                anyhow::anyhow!(e)
-            })?);
+            let store = Arc::new(ConfigStore::load(&handle).map_err(|e| anyhow::anyhow!(e))?);
             let g = store.global();
             crate::proxy::http_client::init(if g.proxy_url.is_empty() {
                 None
@@ -54,10 +58,16 @@ pub fn run() {
                 Some(g.proxy_url.as_str())
             })
             .map_err(|e| anyhow::anyhow!(e))?;
-            let manager = Arc::new(ProxyManager::new(store.endpoints(), g.request_timeout_secs));
+            let log_store = Arc::new(LogStore::new(LOG_BUFFER_CAPACITY));
+            let manager = Arc::new(ProxyManager::new(
+                store.endpoints(),
+                g.request_timeout_secs,
+                log_store.clone(),
+            ));
             app.manage(AppState {
                 store: store.clone(),
                 manager: manager.clone(),
+                log_store: log_store.clone(),
             });
 
             tray::build_tray(&handle).ok();
@@ -67,7 +77,7 @@ pub fn run() {
                 let mgr_for_start = manager.clone();
                 tauri::async_runtime::spawn(async move {
                     let status = match mgr_for_start
-                        .start(g.listen_address.clone(), g.listen_port)
+                        .start(g.listen_address.clone(), g.listen_port, handle_for_start.clone())
                         .await
                     {
                         Ok(s) => s,
