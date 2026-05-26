@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { api, EVENTS } from "@/lib/api";
-import { isMac } from "@/lib/platform";
+import { DRAG_REGION_ATTR, DRAG_REGION_STYLE, isMac } from "@/lib/platform";
 import type { Endpoint, GlobalConfig, ServerStatus } from "@/types";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -19,21 +19,6 @@ import { SettingsPanel } from "@/components/settings/SettingsPanel";
 
 const DRAG_BAR = isMac() ? 28 : 0;
 const HEADER_H = 64;
-
-function startWindowDrag(e: React.MouseEvent<HTMLElement>) {
-  const target = e.target as HTMLElement;
-  if (
-    target.closest(
-      "button, input, select, textarea, a, [role='button'], [data-no-drag]",
-    )
-  ) {
-    return;
-  }
-  if (e.button !== 0) return;
-  getCurrentWindow()
-    .startDragging()
-    .catch(() => undefined);
-}
 
 export default function App() {
   const { setTheme } = useTheme();
@@ -91,19 +76,34 @@ export default function App() {
     >
       {DRAG_BAR > 0 && (
         <div
-          onMouseDown={startWindowDrag}
-          style={{ height: DRAG_BAR }}
+          data-tauri-drag-region
           className="fixed left-0 right-0 top-0 z-[70]"
+          style={
+            { WebkitAppRegion: "drag", height: DRAG_BAR } as React.CSSProperties
+          }
         />
       )}
 
       <header
-        onMouseDown={startWindowDrag}
+        {...DRAG_REGION_ATTR}
         className="fixed left-0 right-0 z-50 bg-background/80 backdrop-blur-md"
-        style={{ top: DRAG_BAR, height: HEADER_H }}
+        style={
+          {
+            ...DRAG_REGION_STYLE,
+            top: DRAG_BAR,
+            height: HEADER_H,
+          } as React.CSSProperties
+        }
       >
-        <div className="flex h-full items-center justify-between gap-2 px-6">
-          <div className="flex items-center gap-2">
+        <div
+          {...DRAG_REGION_ATTR}
+          className="flex h-full items-center justify-between gap-2 px-6"
+          style={DRAG_REGION_STYLE as React.CSSProperties}
+        >
+          <div
+            className="flex items-center gap-2"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
             <BrandLogo className="h-7 w-7" />
             <span className="text-xl font-semibold text-blue-500 dark:text-blue-400">
               API 代理
@@ -119,7 +119,10 @@ export default function App() {
             </Button>
             <ServerToggle status={status} />
           </div>
-          <div className="flex items-center gap-3">
+          <div
+            className="flex items-center gap-3"
+            style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+          >
             <Button
               onClick={() => setShowAdd(true)}
               size="icon"

@@ -2,9 +2,13 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import * as React from "react";
 import { createPortal } from "react-dom";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
-import { DRAG_REGION_ENABLED, isMac } from "@/lib/platform";
+import {
+  DRAG_REGION_ATTR,
+  DRAG_REGION_ENABLED,
+  DRAG_REGION_STYLE,
+  isMac,
+} from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 interface FullScreenPanelProps {
@@ -13,17 +17,6 @@ interface FullScreenPanelProps {
   title: string;
   footer?: React.ReactNode;
   children: React.ReactNode;
-}
-
-function startWindowDrag(e: React.MouseEvent<HTMLElement>) {
-  const target = e.target as HTMLElement;
-  if (target.closest("button, input, select, textarea, a, [role='button']")) {
-    return;
-  }
-  if (e.button !== 0) return;
-  getCurrentWindow()
-    .startDragging()
-    .catch(() => undefined);
 }
 
 export function FullScreenPanel({
@@ -74,27 +67,38 @@ export function FullScreenPanel({
         >
           {dragBarHeight > 0 && (
             <div
-              onMouseDown={startWindowDrag}
-              style={{ height: dragBarHeight }}
+              data-tauri-drag-region
               className="w-full shrink-0"
+              style={
+                {
+                  WebkitAppRegion: "drag",
+                  height: dragBarHeight,
+                } as React.CSSProperties
+              }
             />
           )}
           <header
-            onMouseDown={startWindowDrag}
+            {...DRAG_REGION_ATTR}
             className={cn(
               "flex h-16 shrink-0 items-center gap-3 px-6 border-b",
               "bg-background/95 backdrop-blur",
             )}
+            style={DRAG_REGION_STYLE as React.CSSProperties}
           >
-            <Button
-              variant="outline"
-              size="icon"
-              className="rounded-lg"
-              onClick={onClose}
+            <div
+              className="flex items-center gap-3"
+              style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
             >
-              <ArrowLeft className="h-4 w-4" />
-            </Button>
-            <h1 className="text-lg font-semibold">{title}</h1>
+              <Button
+                variant="outline"
+                size="icon"
+                className="rounded-lg"
+                onClick={onClose}
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <h1 className="text-lg font-semibold">{title}</h1>
+            </div>
           </header>
           <main className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
             {children}
