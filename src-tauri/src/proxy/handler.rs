@@ -76,6 +76,7 @@ fn make_log_skeleton(
         upstream_body_len: 0,
         status_code: None,
         resp_headers: vec![],
+        upstream_resp_headers: vec![],
         resp_body_b64: String::new(),
         resp_body_len: 0,
         resp_body_binary: false,
@@ -300,6 +301,7 @@ pub async fn proxy_handler(
             resp_headers.append(name, value);
         }
     }
+    log.upstream_resp_headers = header_entries(&resp_headers);
     transform::strip_hop_by_hop(&mut resp_headers);
     if warn_body_merge_skipped {
         resp_headers.insert(

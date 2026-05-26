@@ -27,6 +27,14 @@ interface Props {
 type Tab = "reqHeaders" | "reqBody" | "respHeaders" | "respBody";
 type BodyView = "raw" | "transformed";
 
+function headersEqual(a: HeaderEntry[], b: HeaderEntry[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i].key !== b[i].key || a[i].value !== b[i].value) return false;
+  }
+  return true;
+}
+
 function base64ToText(b64: string): string {
   if (!b64) return "";
   try {
@@ -201,6 +209,60 @@ function BodyViewToggle({
           {label}
         </button>
       ))}
+    </div>
+  );
+}
+
+function RequestHeadersTab({
+  log,
+  view,
+  onView,
+}: {
+  log: RequestLog;
+  view: BodyView;
+  onView: (v: BodyView) => void;
+}) {
+  const showToggle = !headersEqual(log.reqHeaders, log.upstreamHeaders);
+  return (
+    <div className="space-y-2">
+      {showToggle && (
+        <BodyViewToggle
+          value={view}
+          onChange={onView}
+          rawLabel="原始（客户端发的）"
+          transformedLabel="转换后（发往上游的）"
+        />
+      )}
+      <HeaderTable
+        headers={view === "raw" ? log.reqHeaders : log.upstreamHeaders}
+      />
+    </div>
+  );
+}
+
+function ResponseHeadersTab({
+  log,
+  view,
+  onView,
+}: {
+  log: RequestLog;
+  view: BodyView;
+  onView: (v: BodyView) => void;
+}) {
+  const showToggle = !headersEqual(log.upstreamRespHeaders, log.respHeaders);
+  return (
+    <div className="space-y-2">
+      {showToggle && (
+        <BodyViewToggle
+          value={view}
+          onChange={onView}
+          rawLabel="原始（上游返回的）"
+          transformedLabel="转换后（返回给客户端的）"
+        />
+      )}
+      <HeaderTable
+        headers={view === "raw" ? log.upstreamRespHeaders : log.respHeaders}
+      />
     </div>
   );
 }
@@ -397,6 +459,8 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
   const [logs, setLogs] = React.useState<RequestLog[]>([]);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("reqHeaders");
+  const [reqHeadersView, setReqHeadersView] = React.useState<BodyView>("raw");
+  const [respHeadersView, setRespHeadersView] = React.useState<BodyView>("raw");
   const [reqBodyView, setReqBodyView] = React.useState<BodyView>("raw");
   const [respBodyView, setRespBodyView] = React.useState<BodyView>("raw");
   const [loading, setLoading] = React.useState(false);
@@ -594,7 +658,11 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
 
               <div className="space-y-2">
                 {tab === "reqHeaders" && (
-                  <HeaderTable headers={selected.reqHeaders} />
+                  <RequestHeadersTab
+                    log={selected}
+                    view={reqHeadersView}
+                    onView={setReqHeadersView}
+                  />
                 )}
                 {tab === "reqBody" && (
                   <RequestBodyTab
@@ -604,7 +672,11 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                   />
                 )}
                 {tab === "respHeaders" && (
-                  <HeaderTable headers={selected.respHeaders} />
+                  <ResponseHeadersTab
+                    log={selected}
+                    view={respHeadersView}
+                    onView={setRespHeadersView}
+                  />
                 )}
                 {tab === "respBody" && (
                   <ResponseBodyTab

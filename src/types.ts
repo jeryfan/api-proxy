@@ -92,6 +92,7 @@ export interface RequestLog {
   upstreamBodyLen: number;
   statusCode?: number;
   respHeaders: HeaderEntry[];
+  upstreamRespHeaders: HeaderEntry[];
   respBodyB64: string;
   respBodyLen: number;
   respBodyBinary: boolean;

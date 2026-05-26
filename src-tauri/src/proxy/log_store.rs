@@ -48,6 +48,7 @@ pub struct RequestLog {
 
     pub status_code: Option<u16>,
     pub resp_headers: Vec<HeaderEntry>,
+    pub upstream_resp_headers: Vec<HeaderEntry>,
     pub resp_body_b64: String,
     pub resp_body_len: usize,
     pub resp_body_binary: bool,
@@ -166,6 +167,7 @@ mod tests {
             upstream_body_len: 0,
             status_code: Some(200),
             resp_headers: vec![],
+            upstream_resp_headers: vec![],
             resp_body_b64: "".into(),
             resp_body_len: 0,
             resp_body_binary: false,
