@@ -133,6 +133,50 @@ export function SettingsPanel({ open, global, onClose, onSaved }: Props) {
         <GlobalProxySettings />
 
         <section className="rounded-xl border p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <Label className="text-base font-semibold">日志</Label>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="hover:text-red-500"
+              onClick={async () => {
+                try {
+                  await api.clearRequestLogs(undefined);
+                  toast.success("已清空所有日志");
+                } catch (e: unknown) {
+                  toast.error(
+                    typeof e === "string"
+                      ? e
+                      : (e as Error)?.message ?? "失败",
+                  );
+                }
+              }}
+            >
+              清空所有日志
+            </Button>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="logBufferCapacity">日志保留条数（1-2000）</Label>
+            <Input
+              id="logBufferCapacity"
+              type="number"
+              min={1}
+              max={2000}
+              {...register("logBufferCapacity", { valueAsNumber: true })}
+            />
+            <p className="text-xs text-muted-foreground">
+              内存环形缓冲容量。超过会按时间顺序淘汰旧记录。重启清空。
+            </p>
+            {errors.logBufferCapacity && (
+              <p className="text-sm text-destructive">
+                {errors.logBufferCapacity.message}
+              </p>
+            )}
+          </div>
+        </section>
+
+        <section className="rounded-xl border p-4 space-y-4">
           <Label className="text-base font-semibold">行为</Label>
           <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
             <div>

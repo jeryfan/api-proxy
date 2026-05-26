@@ -30,6 +30,7 @@ export interface GlobalConfig {
   closeToTray: boolean;
   autoStartServer: boolean;
   proxyUrl: string;
+  logBufferCapacity: number;
 }
 
 export interface ServerStatus {
@@ -75,18 +76,15 @@ export interface RequestLog {
   reqHeaders: HeaderEntry[];
   reqBodyB64: string;
   reqBodyLen: number;
-  reqBodyTruncated: boolean;
   reqBodyBinary: boolean;
   upstreamUrl: string;
   upstreamHeaders: HeaderEntry[];
   upstreamBodyB64: string;
   upstreamBodyLen: number;
-  upstreamBodyTruncated: boolean;
   statusCode?: number;
   respHeaders: HeaderEntry[];
   respBodyB64: string;
   respBodyLen: number;
-  respBodyTruncated: boolean;
   respBodyBinary: boolean;
   respContentType?: string;
   durationMs: number;

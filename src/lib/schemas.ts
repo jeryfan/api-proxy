@@ -50,4 +50,6 @@ export const globalConfigSchema = z.object({
   theme: z.enum(["light", "dark", "system"]),
   closeToTray: z.boolean(),
   autoStartServer: z.boolean(),
+  proxyUrl: z.string(),
+  logBufferCapacity: z.number().int().min(1).max(2000),
 });

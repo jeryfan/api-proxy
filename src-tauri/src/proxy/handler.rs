@@ -19,7 +19,7 @@ use tracing::error;
 use crate::config::Endpoint;
 use crate::events;
 use crate::proxy::log_store::{
-    encode_body, is_binary_content_type, HeaderEntry, LogStore, RequestLog, BODY_LIMIT_BYTES,
+    encode_body, is_binary_content_type, HeaderEntry, LogStore, RequestLog,
 };
 use crate::proxy::transform;
 
@@ -68,18 +68,15 @@ fn make_log_skeleton(
         req_headers: header_entries(req_headers),
         req_body_b64: String::new(),
         req_body_len: 0,
-        req_body_truncated: false,
         req_body_binary: false,
         upstream_url: endpoint.upstream_url.clone(),
         upstream_headers: vec![],
         upstream_body_b64: String::new(),
         upstream_body_len: 0,
-        upstream_body_truncated: false,
         status_code: None,
         resp_headers: vec![],
         resp_body_b64: String::new(),
         resp_body_len: 0,
-        resp_body_truncated: false,
         resp_body_binary: false,
         resp_content_type: None,
         duration_ms: 0,
@@ -197,10 +194,9 @@ pub async fn proxy_handler(
         };
 
     {
-        let (b64, len, trunc) = encode_body(&raw_request_body);
+        let (b64, len) = encode_body(&raw_request_body);
         log.req_body_b64 = b64;
         log.req_body_len = len;
-        log.req_body_truncated = trunc;
         log.req_body_binary = log
             .req_headers
             .iter()
@@ -213,10 +209,9 @@ pub async fn proxy_handler(
         BodyData::Bytes(b) => b.clone(),
     };
     {
-        let (b64, len, trunc) = encode_body(&upstream_body_bytes);
+        let (b64, len) = encode_body(&upstream_body_bytes);
         log.upstream_body_b64 = b64;
         log.upstream_body_len = len;
-        log.upstream_body_truncated = trunc;
         log.upstream_headers = header_entries(&headers);
     }
 
@@ -291,21 +286,12 @@ pub async fn proxy_handler(
 
     tokio::spawn(async move {
         let mut buf: Vec<u8> = Vec::new();
-        let mut truncated = false;
         while let Some(chunk_result) = upstream_stream.next().await {
             match chunk_result {
                 Ok(chunk) => {
                     let bytes = Bytes::from(chunk);
-                    if !skip_resp_body && !truncated {
-                        let remaining = BODY_LIMIT_BYTES.saturating_sub(buf.len());
-                        if remaining == 0 {
-                            truncated = true;
-                        } else if bytes.len() <= remaining {
-                            buf.extend_from_slice(&bytes);
-                        } else {
-                            buf.extend_from_slice(&bytes[..remaining]);
-                            truncated = true;
-                        }
+                    if !skip_resp_body {
+                        buf.extend_from_slice(&bytes);
                     }
                     if tx.send(Ok(bytes)).await.is_err() {
                         break;
@@ -322,10 +308,9 @@ pub async fn proxy_handler(
             }
         }
         if !skip_resp_body {
-            let (b64, len, trunc) = encode_body(&buf);
+            let (b64, len) = encode_body(&buf);
             prelog.resp_body_b64 = b64;
             prelog.resp_body_len = len;
-            prelog.resp_body_truncated = trunc || truncated;
         }
         finalize_log(&log_state, prelog, log_started);
     });

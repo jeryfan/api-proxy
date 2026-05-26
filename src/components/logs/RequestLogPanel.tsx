@@ -46,6 +46,67 @@ function tryFormatJson(text: string): string {
   }
 }
 
+function detectFormat(
+  text: string,
+  contentType?: string,
+): "json" | "form" | "sse" | "xml" | "text" {
+  const ct = (contentType ?? "").toLowerCase();
+  if (ct.includes("application/json") || ct.includes("+json")) return "json";
+  if (ct.includes("application/x-www-form-urlencoded")) return "form";
+  if (ct.includes("text/event-stream")) return "sse";
+  if (ct.includes("xml")) return "xml";
+  const trimmed = text.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json";
+  if (trimmed.startsWith("<")) return "xml";
+  return "text";
+}
+
+function indentXml(input: string): string {
+  let out = "";
+  let depth = 0;
+  const tokens = input.replace(/>\s*</g, ">\n<").split("\n");
+  for (const tok of tokens) {
+    const line = tok.trim();
+    if (!line) continue;
+    if (line.startsWith("</")) depth = Math.max(depth - 1, 0);
+    out += "  ".repeat(depth) + line + "\n";
+    if (
+      line.startsWith("<") &&
+      !line.startsWith("</") &&
+      !line.startsWith("<?") &&
+      !line.endsWith("/>") &&
+      !line.includes("</")
+    ) {
+      depth += 1;
+    }
+  }
+  return out.trimEnd();
+}
+
+function parseSSE(text: string): { event?: string; data: string; id?: string; raw: string }[] {
+  const blocks = text.split(/\r?\n\r?\n/);
+  const events: { event?: string; data: string; id?: string; raw: string }[] = [];
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed) continue;
+    let event: string | undefined;
+    let id: string | undefined;
+    const dataLines: string[] = [];
+    for (const line of trimmed.split(/\r?\n/)) {
+      if (line.startsWith("event:")) event = line.slice(6).trim();
+      else if (line.startsWith("id:")) id = line.slice(3).trim();
+      else if (line.startsWith("data:")) dataLines.push(line.slice(5).trim());
+    }
+    events.push({
+      event,
+      id,
+      data: dataLines.join("\n"),
+      raw: trimmed,
+    });
+  }
+  return events;
+}
+
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
@@ -93,18 +154,18 @@ function HeaderTable({ headers }: { headers: HeaderEntry[] }) {
 function BodyView({
   b64,
   binary,
-  truncated,
   len,
+  contentType,
 }: {
   b64: string;
   binary: boolean;
-  truncated: boolean;
   len: number;
+  contentType?: string;
 }) {
   if (binary) {
     return (
       <p className="text-sm text-muted-foreground">
-        二进制响应，未记录 body（{formatSize(len)}）。
+        二进制内容，未记录 body（{formatSize(len)}）。
       </p>
     );
   }
@@ -112,19 +173,88 @@ function BodyView({
     return <p className="text-sm text-muted-foreground">空</p>;
   }
   const text = base64ToText(b64);
-  const formatted = tryFormatJson(text);
+  const fmt = detectFormat(text, contentType);
+
+  const headBar = (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      <span>{formatSize(len)}</span>
+      <Badge tone="sky">{fmt.toUpperCase()}</Badge>
+      {contentType && <span className="font-mono">{contentType}</span>}
+    </div>
+  );
+
+  if (fmt === "form") {
+    const pairs: [string, string][] = [];
+    try {
+      new URLSearchParams(text).forEach((v, k) => pairs.push([k, v]));
+    } catch {
+      // fall through to text
+    }
+    if (pairs.length > 0) {
+      return (
+        <div className="space-y-2">
+          {headBar}
+          <div className="rounded-md border overflow-hidden">
+            <table className="w-full text-sm font-mono">
+              <tbody>
+                {pairs.map(([k, v], idx) => (
+                  <tr
+                    key={`${k}-${idx}`}
+                    className="border-b last:border-b-0 hover:bg-muted/40"
+                  >
+                    <td className="px-3 py-1.5 text-muted-foreground align-top w-1/3 break-all">
+                      {k}
+                    </td>
+                    <td className="px-3 py-1.5 break-all whitespace-pre-wrap">
+                      {v}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      );
+    }
+  }
+
+  if (fmt === "sse") {
+    const events = parseSSE(text);
+    if (events.length > 0) {
+      return (
+        <div className="space-y-2">
+          {headBar}
+          <div className="space-y-2 max-h-[60vh] overflow-y-auto">
+            {events.map((ev, idx) => {
+              const pretty = tryFormatJson(ev.data);
+              return (
+                <div key={idx} className="rounded-md border bg-muted/30 p-3 space-y-1">
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>#{idx + 1}</span>
+                    {ev.event && <Badge tone="violet">event: {ev.event}</Badge>}
+                    {ev.id && <span className="font-mono">id: {ev.id}</span>}
+                  </div>
+                  <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+                    {pretty}
+                  </pre>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+  }
+
+  let display = text;
+  if (fmt === "json") display = tryFormatJson(text);
+  else if (fmt === "xml") display = indentXml(text);
+
   return (
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <span>{formatSize(len)}</span>
-        {truncated && (
-          <Badge tone="amber">
-            已截断（仅前 {formatSize(b64.length)} 显示）
-          </Badge>
-        )}
-      </div>
+      {headBar}
       <pre className="rounded-md border bg-muted/30 px-3 py-2 text-xs font-mono whitespace-pre-wrap break-all max-h-[60vh] overflow-y-auto">
-        {formatted}
+        {display}
       </pre>
     </div>
   );
@@ -194,7 +324,7 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
       footer={
         <>
           <span className="text-xs text-muted-foreground mr-auto">
-            共 {logs.length} 条（最多保留 200 条，重启清空）
+            共 {logs.length} 条
           </span>
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
             {loading ? (
@@ -335,8 +465,10 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                   <BodyView
                     b64={selected.reqBodyB64}
                     binary={selected.reqBodyBinary}
-                    truncated={selected.reqBodyTruncated}
                     len={selected.reqBodyLen}
+                    contentType={selected.reqHeaders.find((h) =>
+                      h.key.toLowerCase() === "content-type",
+                    )?.value}
                   />
                 )}
                 {tab === "respHeaders" && (
@@ -346,8 +478,8 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                   <BodyView
                     b64={selected.respBodyB64}
                     binary={selected.respBodyBinary}
-                    truncated={selected.respBodyTruncated}
                     len={selected.respBodyLen}
+                    contentType={selected.respContentType}
                   />
                 )}
               </div>

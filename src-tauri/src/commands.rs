@@ -145,9 +145,15 @@ pub async fn apply_global_config(
     if new.request_timeout_secs == 0 || new.request_timeout_secs > 600 {
         return Err("超时秒数必须在 1-600".into());
     }
+    if new.log_buffer_capacity == 0 || new.log_buffer_capacity > 2000 {
+        return Err("日志保留条数必须在 1-2000".into());
+    }
 
     state.store.save_global(&app, new.clone())?;
     state.manager.replace_timeout(new.request_timeout_secs);
+    state
+        .log_store
+        .set_capacity(new.log_buffer_capacity as usize);
 
     let must_restart = state.manager.status().running
         && (old.listen_address != new.listen_address || old.listen_port != new.listen_port);

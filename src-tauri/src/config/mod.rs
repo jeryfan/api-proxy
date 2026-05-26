@@ -59,6 +59,12 @@ pub struct GlobalConfig {
     pub auto_start_server: bool,
     #[serde(default)]
     pub proxy_url: String,
+    #[serde(default = "default_log_buffer_capacity")]
+    pub log_buffer_capacity: u32,
+}
+
+fn default_log_buffer_capacity() -> u32 {
+    10
 }
 
 impl Default for GlobalConfig {
@@ -71,6 +77,7 @@ impl Default for GlobalConfig {
             close_to_tray: true,
             auto_start_server: true,
             proxy_url: String::new(),
+            log_buffer_capacity: 10,
         }
     }
 }

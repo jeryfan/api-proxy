@@ -14,8 +14,6 @@ use crate::proxy::log_store::LogStore;
 use crate::proxy::manager::ProxyManager;
 use crate::state::AppState;
 
-const LOG_BUFFER_CAPACITY: usize = 200;
-
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
@@ -58,7 +56,7 @@ pub fn run() {
                 Some(g.proxy_url.as_str())
             })
             .map_err(|e| anyhow::anyhow!(e))?;
-            let log_store = Arc::new(LogStore::new(LOG_BUFFER_CAPACITY));
+            let log_store = Arc::new(LogStore::new(g.log_buffer_capacity as usize));
             let manager = Arc::new(ProxyManager::new(
                 store.endpoints(),
                 g.request_timeout_secs,
