@@ -1,5 +1,12 @@
 import * as React from "react";
-import { Copy, Pause, Pencil, Play, Trash2 } from "lucide-react";
+import {
+  Copy,
+  History,
+  Pause,
+  Pencil,
+  Play,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
@@ -9,11 +16,12 @@ import type { Endpoint } from "@/types";
 interface Props {
   endpoint: Endpoint;
   onEdit: () => void;
+  onViewLogs: () => void;
 }
 
 const iconBtn = "h-8 w-8 p-1";
 
-export function EndpointActions({ endpoint, onEdit }: Props) {
+export function EndpointActions({ endpoint, onEdit, onViewLogs }: Props) {
   const [pendingDelete, setPendingDelete] = React.useState(false);
   const [duplicating, setDuplicating] = React.useState(false);
 
@@ -77,6 +85,15 @@ export function EndpointActions({ endpoint, onEdit }: Props) {
         ) : (
           <Play className="h-4 w-4" />
         )}
+      </Button>
+      <Button
+        variant="ghost"
+        size="icon"
+        className={iconBtn}
+        onClick={onViewLogs}
+        title="查看请求日志"
+      >
+        <History className="h-4 w-4" />
       </Button>
       <Button
         variant="ghost"

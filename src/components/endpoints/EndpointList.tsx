@@ -16,9 +16,16 @@ interface Props {
   status: ServerStatus;
   onEdit: (e: Endpoint) => void;
   onAdd: () => void;
+  onViewLogs: (e: Endpoint) => void;
 }
 
-export function EndpointList({ endpoints, status, onEdit, onAdd }: Props) {
+export function EndpointList({
+  endpoints,
+  status,
+  onEdit,
+  onAdd,
+  onViewLogs,
+}: Props) {
   const { sortedEndpoints, sensors, handleDragEnd } = useDragSort(endpoints);
 
   if (endpoints.length === 0) {
@@ -42,6 +49,7 @@ export function EndpointList({ endpoints, status, onEdit, onAdd }: Props) {
               endpoint={endpoint}
               serverRunning={status.running}
               onEdit={() => onEdit(endpoint)}
+              onViewLogs={() => onViewLogs(endpoint)}
             />
           ))}
         </div>
@@ -54,12 +62,14 @@ interface SortableProps {
   endpoint: Endpoint;
   serverRunning: boolean;
   onEdit: () => void;
+  onViewLogs: () => void;
 }
 
 function SortableEndpointCard({
   endpoint,
   serverRunning,
   onEdit,
+  onViewLogs,
 }: SortableProps) {
   const { setNodeRef, attributes, listeners, transform, transition, isDragging } =
     useSortable({ id: endpoint.id });
@@ -75,6 +85,7 @@ function SortableEndpointCard({
         endpoint={endpoint}
         serverRunning={serverRunning}
         onEdit={onEdit}
+        onViewLogs={onViewLogs}
         dragHandleProps={{ attributes, listeners, isDragging }}
       />
     </div>

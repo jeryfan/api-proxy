@@ -18,6 +18,7 @@ interface Props {
   endpoint: Endpoint;
   serverRunning: boolean;
   onEdit: () => void;
+  onViewLogs: () => void;
   dragHandleProps?: DragHandleProps;
 }
 
@@ -25,6 +26,7 @@ export function EndpointCard({
   endpoint,
   serverRunning,
   onEdit,
+  onViewLogs,
   dragHandleProps,
 }: Props) {
   const showInactive = endpoint.enabled && !serverRunning;
@@ -90,7 +92,11 @@ export function EndpointCard({
             "transition-opacity duration-200",
           )}
         >
-          <EndpointActions endpoint={endpoint} onEdit={onEdit} />
+          <EndpointActions
+            endpoint={endpoint}
+            onEdit={onEdit}
+            onViewLogs={onViewLogs}
+          />
         </div>
       </div>
     </div>

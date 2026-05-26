@@ -57,3 +57,38 @@ export interface DetectedProxy {
   proxyType: string;
   port: number;
 }
+
+export interface HeaderEntry {
+  key: string;
+  value: string;
+}
+
+export interface RequestLog {
+  id: string;
+  endpointId: string;
+  endpointName: string;
+  startedAt: number;
+  clientAddr?: string;
+  reqMethod: string;
+  reqPath: string;
+  reqQuery?: string;
+  reqHeaders: HeaderEntry[];
+  reqBodyB64: string;
+  reqBodyLen: number;
+  reqBodyTruncated: boolean;
+  reqBodyBinary: boolean;
+  upstreamUrl: string;
+  upstreamHeaders: HeaderEntry[];
+  upstreamBodyB64: string;
+  upstreamBodyLen: number;
+  upstreamBodyTruncated: boolean;
+  statusCode?: number;
+  respHeaders: HeaderEntry[];
+  respBodyB64: string;
+  respBodyLen: number;
+  respBodyTruncated: boolean;
+  respBodyBinary: boolean;
+  respContentType?: string;
+  durationMs: number;
+  error?: string;
+}

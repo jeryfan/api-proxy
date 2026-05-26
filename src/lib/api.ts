@@ -5,6 +5,7 @@ import type {
   GlobalConfig,
   InitPayload,
   ProxyTestResult,
+  RequestLog,
   ServerStatus,
 } from "@/types";
 
@@ -31,10 +32,17 @@ export const api = {
   testProxyUrl: (url: string) =>
     invoke<ProxyTestResult>("test_proxy_url", { url }),
   scanLocalProxies: () => invoke<DetectedProxy[]>("scan_local_proxies"),
+  listRequestLogs: (endpointId?: string, limit?: number) =>
+    invoke<RequestLog[]>("list_request_logs", { endpointId, limit }),
+  getRequestLog: (id: string) =>
+    invoke<RequestLog | null>("get_request_log", { id }),
+  clearRequestLogs: (endpointId?: string) =>
+    invoke<void>("clear_request_logs", { endpointId }),
 };
 
 export const EVENTS = {
   STATUS_CHANGED: "proxy://status-changed",
   ENDPOINTS_CHANGED: "proxy://endpoints-changed",
   CONFIG_ERROR: "proxy://config-error",
+  LOG_RECORDED: "proxy://log-recorded",
 } as const;

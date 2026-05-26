@@ -16,6 +16,7 @@ import { EndpointList } from "@/components/endpoints/EndpointList";
 import { AddEndpointDialog } from "@/components/endpoints/AddEndpointDialog";
 import { EditEndpointDialog } from "@/components/endpoints/EditEndpointDialog";
 import { SettingsPanel } from "@/components/settings/SettingsPanel";
+import { RequestLogPanel } from "@/components/logs/RequestLogPanel";
 
 const DRAG_BAR = isMac() ? 28 : 0;
 const HEADER_H = 64;
@@ -28,6 +29,7 @@ export default function App() {
   const [showAdd, setShowAdd] = React.useState(false);
   const [editing, setEditing] = React.useState<Endpoint | null>(null);
   const [showSettings, setShowSettings] = React.useState(false);
+  const [viewingLogs, setViewingLogs] = React.useState<Endpoint | null>(null);
 
   const refresh = React.useCallback(async () => {
     const data = await api.initData();
@@ -140,6 +142,7 @@ export default function App() {
           status={status}
           onEdit={setEditing}
           onAdd={() => setShowAdd(true)}
+          onViewLogs={setViewingLogs}
         />
       </main>
 
@@ -163,6 +166,10 @@ export default function App() {
           setGlobal(g);
           setTheme(g.theme);
         }}
+      />
+      <RequestLogPanel
+        endpoint={viewingLogs}
+        onClose={() => setViewingLogs(null)}
       />
     </div>
   );
