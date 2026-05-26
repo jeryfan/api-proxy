@@ -360,6 +360,14 @@ pub async fn proxy_handler(
         {
             Ok(b) => b,
             Err(msg) => {
+                // Save the raw upstream body to the log so the user can inspect
+                // what the upstream actually returned, even though the
+                // conversion failed.
+                if !skip_resp_body {
+                    let (b64, len) = encode_body(&raw_bytes);
+                    log.resp_body_b64 = b64;
+                    log.resp_body_len = len;
+                }
                 log.error = Some(format!("response transform failed: {msg}"));
                 finalize_log(&state, log, started);
                 return json_error(
