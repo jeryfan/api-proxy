@@ -96,6 +96,8 @@ export interface RequestLog {
   respBodyLen: number;
   respBodyBinary: boolean;
   respContentType?: string;
+  upstreamRespBodyB64: string;
+  upstreamRespBodyLen: number;
   durationMs: number;
   error?: string;
 }

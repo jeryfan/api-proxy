@@ -1,9 +1,11 @@
 import * as React from "react";
 import { listen } from "@tauri-apps/api/event";
+import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import {
   AlertCircle,
   ArrowRight,
   Clock,
+  Copy,
   Loader2,
   RefreshCw,
   Trash2,
@@ -23,6 +25,7 @@ interface Props {
 }
 
 type Tab = "reqHeaders" | "reqBody" | "respHeaders" | "respBody";
+type BodyView = "raw" | "transformed";
 
 function base64ToText(b64: string): string {
   if (!b64) return "";
@@ -151,6 +154,126 @@ function HeaderTable({ headers }: { headers: HeaderEntry[] }) {
   );
 }
 
+async function copyBodyToClipboard(b64: string, binary: boolean) {
+  if (binary) {
+    toast.info("二进制内容无法复制为文本");
+    return;
+  }
+  const text = base64ToText(b64);
+  try {
+    await writeText(text);
+    toast.success("已复制到剪贴板");
+  } catch (e) {
+    toast.error(`复制失败：${(e as Error)?.message ?? e}`);
+  }
+}
+
+function BodyViewToggle({
+  value,
+  onChange,
+  rawLabel,
+  transformedLabel,
+}: {
+  value: BodyView;
+  onChange: (v: BodyView) => void;
+  rawLabel: string;
+  transformedLabel: string;
+}) {
+  return (
+    <div className="inline-flex items-center rounded-md bg-muted p-0.5 text-xs">
+      {(
+        [
+          ["raw", rawLabel],
+          ["transformed", transformedLabel],
+        ] as [BodyView, string][]
+      ).map(([key, label]) => (
+        <button
+          key={key}
+          type="button"
+          onClick={() => onChange(key)}
+          className={cn(
+            "px-3 py-1 rounded-sm transition-colors",
+            value === key
+              ? "bg-background text-foreground shadow-sm"
+              : "text-muted-foreground hover:text-foreground",
+          )}
+        >
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function RequestBodyTab({
+  log,
+  view,
+  onView,
+}: {
+  log: RequestLog;
+  view: BodyView;
+  onView: (v: BodyView) => void;
+}) {
+  const reqContentType = log.reqHeaders.find(
+    (h) => h.key.toLowerCase() === "content-type",
+  )?.value;
+  const upstreamContentType = log.upstreamHeaders.find(
+    (h) => h.key.toLowerCase() === "content-type",
+  )?.value;
+  const showToggle =
+    log.reqBodyB64 !== log.upstreamBodyB64 || log.reqBodyLen !== log.upstreamBodyLen;
+  return (
+    <div className="space-y-2">
+      {showToggle && (
+        <BodyViewToggle
+          value={view}
+          onChange={onView}
+          rawLabel="原始（客户端发的）"
+          transformedLabel="转换后（发往上游的）"
+        />
+      )}
+      <BodyView
+        b64={view === "raw" ? log.reqBodyB64 : log.upstreamBodyB64}
+        binary={log.reqBodyBinary}
+        len={view === "raw" ? log.reqBodyLen : log.upstreamBodyLen}
+        contentType={view === "raw" ? reqContentType : upstreamContentType}
+      />
+    </div>
+  );
+}
+
+function ResponseBodyTab({
+  log,
+  view,
+  onView,
+}: {
+  log: RequestLog;
+  view: BodyView;
+  onView: (v: BodyView) => void;
+}) {
+  const showToggle =
+    log.upstreamRespBodyB64 !== log.respBodyB64 ||
+    log.upstreamRespBodyLen !== log.respBodyLen;
+  return (
+    <div className="space-y-2">
+      {showToggle && (
+        <BodyViewToggle
+          value={view}
+          onChange={onView}
+          rawLabel="原始（上游返回的）"
+          transformedLabel="转换后（返回给客户端的）"
+        />
+      )}
+      <BodyView
+        b64={view === "raw" ? log.upstreamRespBodyB64 : log.respBodyB64}
+        binary={log.respBodyBinary}
+        len={view === "raw" ? log.upstreamRespBodyLen : log.respBodyLen}
+        contentType={log.respContentType}
+      />
+    </div>
+  );
+}
+
 function BodyView({
   b64,
   binary,
@@ -180,6 +303,16 @@ function BodyView({
       <span>{formatSize(len)}</span>
       <Badge tone="sky">{fmt.toUpperCase()}</Badge>
       {contentType && <span className="font-mono">{contentType}</span>}
+      <Button
+        variant="ghost"
+        size="sm"
+        className="ml-auto h-7 px-2 text-xs"
+        onClick={() => copyBodyToClipboard(b64, binary)}
+        title="复制全部内容"
+      >
+        <Copy className="h-3 w-3" />
+        复制
+      </Button>
     </div>
   );
 
@@ -264,6 +397,8 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
   const [logs, setLogs] = React.useState<RequestLog[]>([]);
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [tab, setTab] = React.useState<Tab>("reqHeaders");
+  const [reqBodyView, setReqBodyView] = React.useState<BodyView>("raw");
+  const [respBodyView, setRespBodyView] = React.useState<BodyView>("raw");
   const [loading, setLoading] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
@@ -462,24 +597,20 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                   <HeaderTable headers={selected.reqHeaders} />
                 )}
                 {tab === "reqBody" && (
-                  <BodyView
-                    b64={selected.reqBodyB64}
-                    binary={selected.reqBodyBinary}
-                    len={selected.reqBodyLen}
-                    contentType={selected.reqHeaders.find((h) =>
-                      h.key.toLowerCase() === "content-type",
-                    )?.value}
+                  <RequestBodyTab
+                    log={selected}
+                    view={reqBodyView}
+                    onView={setReqBodyView}
                   />
                 )}
                 {tab === "respHeaders" && (
                   <HeaderTable headers={selected.respHeaders} />
                 )}
                 {tab === "respBody" && (
-                  <BodyView
-                    b64={selected.respBodyB64}
-                    binary={selected.respBodyBinary}
-                    len={selected.respBodyLen}
-                    contentType={selected.respContentType}
+                  <ResponseBodyTab
+                    log={selected}
+                    view={respBodyView}
+                    onView={setRespBodyView}
                   />
                 )}
               </div>

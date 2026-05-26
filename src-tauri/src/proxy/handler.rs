@@ -80,6 +80,8 @@ fn make_log_skeleton(
         resp_body_len: 0,
         resp_body_binary: false,
         resp_content_type: None,
+        upstream_resp_body_b64: String::new(),
+        upstream_resp_body_len: 0,
         duration_ms: 0,
         error: None,
     }
@@ -321,6 +323,13 @@ pub async fn proxy_handler(
     let api_format = endpoint.api_format;
     let convert_response = api_format.needs_conversion();
 
+    // Shared buffer that captures the *raw* upstream response body (before any
+    // format conversion). For SSE conversion we tap each upstream chunk; for
+    // non-SSE we fill it after collecting bytes(); for passthrough it stays
+    // identical to resp_body and is filled in the tee loop below.
+    let raw_upstream_buf: Arc<std::sync::Mutex<Vec<u8>>> =
+        Arc::new(std::sync::Mutex::new(Vec::new()));
+
     // Decide response stream: passthrough vs streaming-convert vs buffered-convert.
     let response_stream: std::pin::Pin<
         Box<dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send>,
@@ -339,7 +348,16 @@ pub async fn proxy_handler(
         resp_headers.remove(http::header::CONTENT_LENGTH);
         log.resp_headers = header_entries(&resp_headers);
         log.resp_content_type = Some("text/event-stream".into());
-        crate::proxy::format::wrap_response_stream(api_format, upstream_response.bytes_stream())
+        let raw_tap = raw_upstream_buf.clone();
+        let tapped = upstream_response.bytes_stream().map(move |r| {
+            if let Ok(ref chunk) = r {
+                if let Ok(mut buf) = raw_tap.lock() {
+                    buf.extend_from_slice(chunk);
+                }
+            }
+            r
+        });
+        crate::proxy::format::wrap_response_stream(api_format, tapped)
     } else {
         // Non-SSE: buffer upstream body, transform once, return as a single chunk.
         let raw_bytes = match upstream_response.bytes().await {
@@ -356,15 +374,18 @@ pub async fn proxy_handler(
                 );
             }
         };
+        // Save raw upstream body regardless of transform outcome.
+        if let Ok(mut buf) = raw_upstream_buf.lock() {
+            *buf = raw_bytes.clone();
+        }
         let converted = match crate::proxy::format::transform_response_json(api_format, &raw_bytes)
         {
             Ok(b) => b,
             Err(msg) => {
-                // Save the raw upstream body to the log so the user can inspect
-                // what the upstream actually returned, even though the
-                // conversion failed.
                 if !skip_resp_body {
                     let (b64, len) = encode_body(&raw_bytes);
+                    log.upstream_resp_body_b64 = b64.clone();
+                    log.upstream_resp_body_len = len;
                     log.resp_body_b64 = b64;
                     log.resp_body_len = len;
                 }
@@ -397,6 +418,7 @@ pub async fn proxy_handler(
     let log_started = started;
     let mut prelog = log;
     let mut upstream_stream = response_stream;
+    let raw_buf_for_log = raw_upstream_buf.clone();
 
     tokio::spawn(async move {
         let mut buf: Vec<u8> = Vec::new();
@@ -425,6 +447,21 @@ pub async fn proxy_handler(
             let (b64, len) = encode_body(&buf);
             prelog.resp_body_b64 = b64;
             prelog.resp_body_len = len;
+            // Fill upstream_resp_body: for passthrough we never tapped, so
+            // copy from the same buffer; for SSE conversion the tap filled it;
+            // for non-SSE conversion it was already populated earlier.
+            if prelog.upstream_resp_body_b64.is_empty() {
+                if let Ok(raw_buf) = raw_buf_for_log.lock() {
+                    if raw_buf.is_empty() {
+                        prelog.upstream_resp_body_b64 = prelog.resp_body_b64.clone();
+                        prelog.upstream_resp_body_len = prelog.resp_body_len;
+                    } else {
+                        let (rb64, rlen) = encode_body(&raw_buf);
+                        prelog.upstream_resp_body_b64 = rb64;
+                        prelog.upstream_resp_body_len = rlen;
+                    }
+                }
+            }
         }
         finalize_log(&log_state, prelog, log_started);
     });

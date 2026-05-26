@@ -52,6 +52,8 @@ pub struct RequestLog {
     pub resp_body_len: usize,
     pub resp_body_binary: bool,
     pub resp_content_type: Option<String>,
+    pub upstream_resp_body_b64: String,
+    pub upstream_resp_body_len: usize,
 
     pub duration_ms: u64,
     pub error: Option<String>,
@@ -168,6 +170,8 @@ mod tests {
             resp_body_len: 0,
             resp_body_binary: false,
             resp_content_type: None,
+            upstream_resp_body_b64: "".into(),
+            upstream_resp_body_len: 0,
             duration_ms: 12,
             error: None,
         }
