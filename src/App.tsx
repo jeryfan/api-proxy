@@ -111,11 +111,11 @@ export default function App() {
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8"
+              className="hover:bg-black/5 dark:hover:bg-white/5"
               onClick={() => setShowSettings(true)}
               title="设置"
             >
-              <SettingsIcon className="h-4 w-4" />
+              <SettingsIcon className="w-4 h-4" />
             </Button>
             <ServerToggle status={status} />
           </div>

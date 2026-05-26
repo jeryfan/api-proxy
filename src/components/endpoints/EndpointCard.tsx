@@ -52,7 +52,7 @@ export function EndpointCard({
           >
             <GripVertical className="h-4 w-4" />
           </button>
-          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center border flex-shrink-0">
+          <div className="h-8 w-8 rounded-lg bg-muted flex items-center justify-center border flex-shrink-0 group-hover:scale-105 transition-transform duration-300">
             <Route className="h-5 w-5 text-muted-foreground" />
           </div>
           <div className="space-y-1 min-w-0">
