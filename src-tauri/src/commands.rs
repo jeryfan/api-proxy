@@ -99,6 +99,34 @@ pub fn toggle_endpoint(
     Ok(())
 }
 
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SortUpdate {
+    pub id: String,
+    pub sort_index: i32,
+}
+
+#[tauri::command]
+pub fn update_endpoint_sort(
+    app: AppHandle<Wry>,
+    state: State<'_, AppState>,
+    updates: Vec<SortUpdate>,
+) -> Result<(), String> {
+    use std::collections::HashMap;
+    let map: HashMap<String, i32> = updates.into_iter().map(|u| (u.id, u.sort_index)).collect();
+    let mut endpoints = state.store.endpoints();
+    for e in endpoints.iter_mut() {
+        if let Some(&idx) = map.get(&e.id) {
+            e.sort_index = idx;
+        }
+    }
+    endpoints.sort_by_key(|e| e.sort_index);
+    state.store.save_endpoints(&app, endpoints.clone())?;
+    state.manager.replace_routes(endpoints.clone());
+    let _ = app.emit(events::ENDPOINTS_CHANGED, &endpoints);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn get_global_config(state: State<'_, AppState>) -> GlobalConfig {
     state.store.global()

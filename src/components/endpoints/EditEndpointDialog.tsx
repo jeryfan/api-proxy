@@ -39,6 +39,7 @@ export function EditEndpointDialog({ endpoint, onClose, onSaved }: Props) {
           try {
             const ep: Endpoint = {
               ...values,
+              sortIndex: endpoint.sortIndex,
               createdAt: endpoint.createdAt,
               updatedAt: endpoint.updatedAt,
             };

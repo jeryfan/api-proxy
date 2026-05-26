@@ -30,6 +30,7 @@ pub fn run() {
             commands::save_endpoint,
             commands::delete_endpoint,
             commands::toggle_endpoint,
+            commands::update_endpoint_sort,
             commands::get_global_config,
             commands::apply_global_config,
             commands::server_status,

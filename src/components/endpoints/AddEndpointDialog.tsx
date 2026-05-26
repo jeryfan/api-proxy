@@ -39,6 +39,7 @@ export function AddEndpointDialog({ open, onClose, onSaved }: Props) {
             try {
               const ep: Endpoint = {
                 ...values,
+                sortIndex: 0,
                 createdAt: 0,
                 updatedAt: 0,
               };

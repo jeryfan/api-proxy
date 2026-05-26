@@ -191,6 +191,7 @@ mod tests {
             header_rules: vec![],
             query_rules: vec![],
             body_merge: "".into(),
+            sort_index: 0,
             created_at: 0,
             updated_at: 0,
         }

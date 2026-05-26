@@ -1,17 +1,34 @@
+import type {
+  DraggableAttributes,
+  DraggableSyntheticListeners,
+} from "@dnd-kit/core";
 import { GripVertical, Route } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { Endpoint } from "@/types";
 import { EndpointActions } from "./EndpointActions";
 
+interface DragHandleProps {
+  attributes: DraggableAttributes;
+  listeners: DraggableSyntheticListeners;
+  isDragging: boolean;
+}
+
 interface Props {
   endpoint: Endpoint;
   serverRunning: boolean;
   onEdit: () => void;
+  dragHandleProps?: DragHandleProps;
 }
 
-export function EndpointCard({ endpoint, serverRunning, onEdit }: Props) {
+export function EndpointCard({
+  endpoint,
+  serverRunning,
+  onEdit,
+  dragHandleProps,
+}: Props) {
   const showInactive = endpoint.enabled && !serverRunning;
+  const isDragging = dragHandleProps?.isDragging ?? false;
   return (
     <div
       className={cn(
@@ -19,6 +36,7 @@ export function EndpointCard({ endpoint, serverRunning, onEdit }: Props) {
         "bg-card text-card-foreground group hover:border-border-active hover:shadow-sm",
         endpoint.enabled &&
           "border-emerald-500/60 shadow-sm shadow-emerald-500/10",
+        isDragging && "cursor-grabbing border-primary shadow-lg scale-105 z-10",
       )}
     >
       {endpoint.enabled && (
@@ -27,9 +45,10 @@ export function EndpointCard({ endpoint, serverRunning, onEdit }: Props) {
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-1 items-center gap-2 min-w-0">
           <button
-            className="-ml-1.5 flex-shrink-0 cursor-grab p-1.5 text-muted-foreground/50 hover:text-muted-foreground"
-            tabIndex={-1}
-            aria-hidden
+            type="button"
+            className="-ml-1.5 flex-shrink-0 cursor-grab active:cursor-grabbing p-1.5 text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+            {...(dragHandleProps?.attributes ?? {})}
+            {...(dragHandleProps?.listeners ?? {})}
           >
             <GripVertical className="h-4 w-4" />
           </button>

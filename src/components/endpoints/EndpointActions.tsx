@@ -37,6 +37,7 @@ export function EndpointActions({ endpoint, onEdit }: Props) {
         id: "",
         name: `${endpoint.name} 副本`,
         enabled: false,
+        sortIndex: 0,
         createdAt: 0,
         updatedAt: 0,
       });

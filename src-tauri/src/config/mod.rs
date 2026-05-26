@@ -38,6 +38,8 @@ pub struct Endpoint {
     pub query_rules: Vec<Rule>,
     #[serde(default)]
     pub body_merge: String,
+    #[serde(default)]
+    pub sort_index: i32,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -178,6 +180,7 @@ mod tests {
             header_rules: vec![],
             query_rules: vec![],
             body_merge: "".into(),
+            sort_index: 0,
             created_at: 0,
             updated_at: 0,
         }

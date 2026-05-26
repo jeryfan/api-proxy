@@ -17,6 +17,7 @@ export interface Endpoint {
   headerRules: Rule[];
   queryRules: Rule[];
   bodyMerge: string;
+  sortIndex: number;
   createdAt: number;
   updatedAt: number;
 }

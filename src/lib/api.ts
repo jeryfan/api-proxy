@@ -16,6 +16,8 @@ export const api = {
   deleteEndpoint: (id: string) => invoke<void>("delete_endpoint", { id }),
   toggleEndpoint: (id: string, enabled: boolean) =>
     invoke<void>("toggle_endpoint", { id, enabled }),
+  updateEndpointSort: (updates: { id: string; sortIndex: number }[]) =>
+    invoke<void>("update_endpoint_sort", { updates }),
   getGlobalConfig: () => invoke<GlobalConfig>("get_global_config"),
   applyGlobalConfig: (config: GlobalConfig) =>
     invoke<ServerStatus>("apply_global_config", { new: config }),
