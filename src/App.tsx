@@ -20,6 +20,21 @@ import { SettingsPanel } from "@/components/settings/SettingsPanel";
 const DRAG_BAR = isMac() ? 28 : 0;
 const HEADER_H = 64;
 
+function startWindowDrag(e: React.MouseEvent<HTMLElement>) {
+  const target = e.target as HTMLElement;
+  if (
+    target.closest(
+      "button, input, select, textarea, a, [role='button'], [data-no-drag]",
+    )
+  ) {
+    return;
+  }
+  if (e.button !== 0) return;
+  getCurrentWindow()
+    .startDragging()
+    .catch(() => undefined);
+}
+
 export default function App() {
   const { setTheme } = useTheme();
   const [endpoints, setEndpoints] = React.useState<Endpoint[]>([]);
@@ -76,14 +91,14 @@ export default function App() {
     >
       {DRAG_BAR > 0 && (
         <div
-          data-tauri-drag-region
+          onMouseDown={startWindowDrag}
           style={{ height: DRAG_BAR }}
           className="fixed left-0 right-0 top-0 z-[70]"
         />
       )}
 
       <header
-        data-tauri-drag-region
+        onMouseDown={startWindowDrag}
         className="fixed left-0 right-0 z-50 bg-background/80 backdrop-blur-md"
         style={{ top: DRAG_BAR, height: HEADER_H }}
       >

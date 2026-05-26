@@ -2,6 +2,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { ArrowLeft } from "lucide-react";
 import * as React from "react";
 import { createPortal } from "react-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Button } from "@/components/ui/button";
 import { DRAG_REGION_ENABLED, isMac } from "@/lib/platform";
 import { cn } from "@/lib/utils";
@@ -12,6 +13,17 @@ interface FullScreenPanelProps {
   title: string;
   footer?: React.ReactNode;
   children: React.ReactNode;
+}
+
+function startWindowDrag(e: React.MouseEvent<HTMLElement>) {
+  const target = e.target as HTMLElement;
+  if (target.closest("button, input, select, textarea, a, [role='button']")) {
+    return;
+  }
+  if (e.button !== 0) return;
+  getCurrentWindow()
+    .startDragging()
+    .catch(() => undefined);
 }
 
 export function FullScreenPanel({
@@ -62,13 +74,13 @@ export function FullScreenPanel({
         >
           {dragBarHeight > 0 && (
             <div
-              data-tauri-drag-region
+              onMouseDown={startWindowDrag}
               style={{ height: dragBarHeight }}
               className="w-full shrink-0"
             />
           )}
           <header
-            data-tauri-drag-region
+            onMouseDown={startWindowDrag}
             className={cn(
               "flex h-16 shrink-0 items-center gap-3 px-6 border-b",
               "bg-background/95 backdrop-blur",
@@ -79,7 +91,6 @@ export function FullScreenPanel({
               size="icon"
               className="rounded-lg"
               onClick={onClose}
-              data-tauri-no-drag
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
