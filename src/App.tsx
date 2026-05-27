@@ -107,7 +107,7 @@ export default function App() {
             style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
           >
             <BrandLogo className="h-7 w-7" />
-            <span className="text-xl font-semibold text-blue-500 dark:text-blue-400">
+            <span className="text-xl font-semibold text-stone-800 dark:text-stone-100">
               API 代理
             </span>
             <Button
