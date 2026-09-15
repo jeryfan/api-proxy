@@ -257,13 +257,13 @@ pub async fn proxy_handler(
     log.resp_content_type = content_type.clone();
     let skip_resp_body = content_type
         .as_deref()
-        .map(|c| is_binary_content_type(c))
+        .map(is_binary_content_type)
         .unwrap_or(false);
     log.resp_body_binary = skip_resp_body;
 
-    let mut upstream_stream = upstream_response.bytes_stream().map(|r| {
-        r.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
-    });
+    let mut upstream_stream = upstream_response
+        .bytes_stream()
+        .map(|r| r.map_err(std::io::Error::other));
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(16);
     let log_state = state.clone();
@@ -274,8 +274,7 @@ pub async fn proxy_handler(
         let mut buf: Vec<u8> = Vec::new();
         while let Some(chunk_result) = upstream_stream.next().await {
             match chunk_result {
-                Ok(chunk) => {
-                    let bytes = Bytes::from(chunk);
+                Ok(bytes) => {
                     if !skip_resp_body {
                         buf.extend_from_slice(&bytes);
                     }
@@ -286,9 +285,7 @@ pub async fn proxy_handler(
                 Err(e) => {
                     let msg = e.to_string();
                     prelog.error = Some(msg.clone());
-                    let _ = tx
-                        .send(Err(std::io::Error::new(std::io::ErrorKind::Other, e)))
-                        .await;
+                    let _ = tx.send(Err(std::io::Error::other(e))).await;
                     break;
                 }
             }

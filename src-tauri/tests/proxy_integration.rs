@@ -46,7 +46,7 @@ async fn fake_upstream() -> (std::net::SocketAddr, tokio::task::JoinHandle<()>) 
     (addr, join)
 }
 
-fn ep(path: &str, upstream: &str, body_merge: &str) -> Endpoint {
+fn ep(path: &str, upstream: &str) -> Endpoint {
     Endpoint {
         id: "id".into(),
         name: "ep".into(),
@@ -58,9 +58,7 @@ fn ep(path: &str, upstream: &str, body_merge: &str) -> Endpoint {
         fixed_upstream: false,
         header_rules: vec![],
         query_rules: vec![],
-        body_merge: body_merge.into(),
         sort_index: 0,
-        api_format: apiproxy_lib::proxy::format::ApiFormat::Passthrough,
         created_at: 0,
         updated_at: 0,
     }
@@ -71,9 +69,8 @@ async fn forwards_basic_get() {
     let _ = apiproxy_lib::proxy::http_client::init(None);
     let (upstream_addr, _u) = fake_upstream().await;
     let upstream = format!("http://{}/v1", upstream_addr);
-    let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
+    let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream)]));
     let timeout = Arc::new(AtomicU64::new(10));
-    let client = reqwest::Client::new();
     let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await
         .unwrap();
@@ -84,17 +81,16 @@ async fn forwards_basic_get() {
     assert_eq!(json["method"], "GET");
     assert_eq!(json["path"], "/v1/hello");
 
-    let _ = client;
     let _ = server.shutdown.send(());
     server.join.await.ok();
 }
 
 #[tokio::test]
-async fn forwards_post_with_body_merge_and_header() {
+async fn forwards_post_with_header_rule_and_passthrough_body() {
     let _ = apiproxy_lib::proxy::http_client::init(None);
     let (upstream_addr, _u) = fake_upstream().await;
     let upstream = format!("http://{}/v1", upstream_addr);
-    let mut endpoint = ep("/cc", &upstream, r#"{"model":"x"}"#);
+    let mut endpoint = ep("/cc", &upstream);
     endpoint.header_rules = vec![Rule {
         action: RuleAction::Set,
         key: "x-test".into(),
@@ -118,9 +114,8 @@ async fn forwards_post_with_body_merge_and_header() {
     assert_eq!(json["method"], "POST");
     assert_eq!(json["path"], "/v1/chat");
     assert_eq!(json["headers"]["x-test"], "1");
-    let body_obj: serde_json::Value = serde_json::from_str(json["body"].as_str().unwrap()).unwrap();
-    assert_eq!(body_obj["q"], "hi");
-    assert_eq!(body_obj["model"], "x"); // patch wins
+    // 纯转发：请求体原样透传
+    assert_eq!(json["body"], r#"{"q":"hi","model":"orig"}"#);
 
     let _ = server.shutdown.send(());
     server.join.await.ok();
@@ -158,7 +153,7 @@ async fn upstream_timeout_returns_502() {
     });
 
     let upstream = format!("http://{}", upstream_addr);
-    let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream, "")]));
+    let routes = Arc::new(ArcSwap::from_pointee(vec![ep("/cc", &upstream)]));
     let timeout = Arc::new(AtomicU64::new(1));
     let server = spawn_server("127.0.0.1".into(), 0, routes, timeout, std::sync::Arc::new(apiproxy_lib::proxy::log_store::LogStore::new(50)), None)
         .await

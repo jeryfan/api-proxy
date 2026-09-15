@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::{AppHandle, Emitter, Manager, State, Wry};
+use tauri::{AppHandle, Emitter, State, Wry};
 
 use crate::config::{self, Endpoint, GlobalConfig, ServerStatus};
 use crate::events;
@@ -20,11 +20,6 @@ pub fn init_data(state: State<'_, AppState>) -> InitPayload {
         endpoints: state.store.endpoints(),
         status: state.manager.status(),
     }
-}
-
-#[tauri::command]
-pub fn list_endpoints(state: State<'_, AppState>) -> Vec<Endpoint> {
-    state.store.endpoints()
 }
 
 #[tauri::command]
@@ -128,11 +123,6 @@ pub fn update_endpoint_sort(
 }
 
 #[tauri::command]
-pub fn get_global_config(state: State<'_, AppState>) -> GlobalConfig {
-    state.store.global()
-}
-
-#[tauri::command]
 pub async fn apply_global_config(
     app: AppHandle<Wry>,
     state: State<'_, AppState>,
@@ -170,11 +160,6 @@ pub async fn apply_global_config(
 }
 
 #[tauri::command]
-pub fn server_status(state: State<'_, AppState>) -> ServerStatus {
-    state.manager.status()
-}
-
-#[tauri::command]
 pub async fn start_server(
     app: AppHandle<Wry>,
     state: State<'_, AppState>,
@@ -196,27 +181,6 @@ pub async fn stop_server(
     let status = state.manager.stop().await?;
     let _ = app.emit(events::STATUS_CHANGED, &status);
     Ok(status)
-}
-
-#[tauri::command]
-pub fn open_config_dir(app: AppHandle<Wry>) -> Result<(), String> {
-    let dir = app.path().app_config_dir().map_err(|e| e.to_string())?;
-    open_path(&dir)
-}
-
-fn open_path(path: &std::path::Path) -> Result<(), String> {
-    let path = path.to_string_lossy().to_string();
-    #[cfg(target_os = "macos")]
-    let cmd = ("open", path);
-    #[cfg(target_os = "windows")]
-    let cmd = ("explorer", path);
-    #[cfg(target_os = "linux")]
-    let cmd = ("xdg-open", path);
-    std::process::Command::new(cmd.0)
-        .arg(cmd.1)
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
 }
 
 use std::net::{Ipv4Addr, SocketAddrV4, TcpStream};
@@ -356,14 +320,6 @@ pub fn list_request_logs(
     limit: Option<usize>,
 ) -> Vec<crate::proxy::log_store::RequestLog> {
     state.log_store.list(endpoint_id.as_deref(), limit)
-}
-
-#[tauri::command]
-pub fn get_request_log(
-    state: State<'_, AppState>,
-    id: String,
-) -> Option<crate::proxy::log_store::RequestLog> {
-    state.log_store.get(&id)
 }
 
 #[tauri::command]

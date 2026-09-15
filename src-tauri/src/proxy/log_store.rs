@@ -110,11 +110,6 @@ impl LogStore {
         }
     }
 
-    pub fn get(&self, id: &str) -> Option<RequestLog> {
-        let g = self.inner.read().ok()?;
-        g.buf.iter().find(|l| l.id == id).cloned()
-    }
-
     pub fn clear(&self, endpoint_id: Option<&str>) {
         if let Ok(mut g) = self.inner.write() {
             match endpoint_id {

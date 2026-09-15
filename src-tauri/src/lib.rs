@@ -27,23 +27,18 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::init_data,
-            commands::list_endpoints,
             commands::save_endpoint,
             commands::delete_endpoint,
             commands::toggle_endpoint,
             commands::update_endpoint_sort,
-            commands::get_global_config,
             commands::apply_global_config,
-            commands::server_status,
             commands::start_server,
             commands::stop_server,
-            commands::open_config_dir,
             commands::get_global_proxy_url,
             commands::set_global_proxy_url,
             commands::test_proxy_url,
             commands::scan_local_proxies,
             commands::list_request_logs,
-            commands::get_request_log,
             commands::clear_request_logs,
         ])
         .setup(|app| {

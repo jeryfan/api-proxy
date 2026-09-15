@@ -11,7 +11,6 @@ import type {
 
 export const api = {
   initData: () => invoke<InitPayload>("init_data"),
-  listEndpoints: () => invoke<Endpoint[]>("list_endpoints"),
   saveEndpoint: (endpoint: Endpoint) =>
     invoke<Endpoint>("save_endpoint", { endpoint }),
   deleteEndpoint: (id: string) => invoke<void>("delete_endpoint", { id }),
@@ -19,13 +18,10 @@ export const api = {
     invoke<void>("toggle_endpoint", { id, enabled }),
   updateEndpointSort: (updates: { id: string; sortIndex: number }[]) =>
     invoke<void>("update_endpoint_sort", { updates }),
-  getGlobalConfig: () => invoke<GlobalConfig>("get_global_config"),
   applyGlobalConfig: (config: GlobalConfig) =>
     invoke<ServerStatus>("apply_global_config", { new: config }),
-  serverStatus: () => invoke<ServerStatus>("server_status"),
   startServer: () => invoke<ServerStatus>("start_server"),
   stopServer: () => invoke<ServerStatus>("stop_server"),
-  openConfigDir: () => invoke<void>("open_config_dir"),
   getGlobalProxyUrl: () => invoke<string>("get_global_proxy_url"),
   setGlobalProxyUrl: (url: string) =>
     invoke<void>("set_global_proxy_url", { url }),
@@ -34,8 +30,6 @@ export const api = {
   scanLocalProxies: () => invoke<DetectedProxy[]>("scan_local_proxies"),
   listRequestLogs: (endpointId?: string, limit?: number) =>
     invoke<RequestLog[]>("list_request_logs", { endpointId, limit }),
-  getRequestLog: (id: string) =>
-    invoke<RequestLog | null>("get_request_log", { id }),
   clearRequestLogs: (endpointId?: string) =>
     invoke<void>("clear_request_logs", { endpointId }),
 };

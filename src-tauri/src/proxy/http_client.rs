@@ -9,7 +9,6 @@ use std::time::Duration;
 use reqwest::Client;
 
 static GLOBAL_CLIENT: OnceLock<RwLock<Client>> = OnceLock::new();
-static CURRENT_PROXY_URL: OnceLock<RwLock<Option<String>>> = OnceLock::new();
 
 /// 初始化全局客户端（应用启动时调用一次）
 pub fn init(proxy_url: Option<&str>) -> Result<(), String> {
@@ -18,7 +17,6 @@ pub fn init(proxy_url: Option<&str>) -> Result<(), String> {
     if GLOBAL_CLIENT.set(RwLock::new(client)).is_err() {
         return apply_proxy(proxy_url);
     }
-    let _ = CURRENT_PROXY_URL.set(RwLock::new(effective.map(|s| s.to_string())));
     Ok(())
 }
 
@@ -38,10 +36,6 @@ pub fn apply_proxy(proxy_url: Option<&str>) -> Result<(), String> {
     } else {
         return init(proxy_url);
     }
-    if let Some(lock) = CURRENT_PROXY_URL.get() {
-        let mut u = lock.write().map_err(|_| "url lock poisoned".to_string())?;
-        *u = effective.map(|s| s.to_string());
-    }
     Ok(())
 }
 
@@ -52,14 +46,6 @@ pub fn get() -> Client {
         .and_then(|lock| lock.read().ok())
         .map(|c| c.clone())
         .unwrap_or_else(|| build_client(None).unwrap_or_default())
-}
-
-/// 当前代理 URL（用于状态展示）
-pub fn get_current_proxy_url() -> Option<String> {
-    CURRENT_PROXY_URL
-        .get()
-        .and_then(|lock| lock.read().ok())
-        .and_then(|u| u.clone())
 }
 
 /// 把 URL 中的 username:password 中的密码部分换成 ***（用于日志）
