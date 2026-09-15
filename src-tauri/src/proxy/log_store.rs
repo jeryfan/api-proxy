@@ -43,8 +43,6 @@ pub struct RequestLog {
 
     pub upstream_url: String,
     pub upstream_headers: Vec<HeaderEntry>,
-    pub upstream_body_b64: String,
-    pub upstream_body_len: usize,
 
     pub status_code: Option<u16>,
     pub resp_headers: Vec<HeaderEntry>,
@@ -53,8 +51,6 @@ pub struct RequestLog {
     pub resp_body_len: usize,
     pub resp_body_binary: bool,
     pub resp_content_type: Option<String>,
-    pub upstream_resp_body_b64: String,
-    pub upstream_resp_body_len: usize,
 
     pub duration_ms: u64,
     pub error: Option<String>,
@@ -163,8 +159,6 @@ mod tests {
             req_body_binary: false,
             upstream_url: "https://example.com/x".into(),
             upstream_headers: vec![],
-            upstream_body_b64: "".into(),
-            upstream_body_len: 0,
             status_code: Some(200),
             resp_headers: vec![],
             upstream_resp_headers: vec![],
@@ -172,8 +166,6 @@ mod tests {
             resp_body_len: 0,
             resp_body_binary: false,
             resp_content_type: None,
-            upstream_resp_body_b64: "".into(),
-            upstream_resp_body_len: 0,
             duration_ms: 12,
             error: None,
         }

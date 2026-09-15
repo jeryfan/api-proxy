@@ -1,12 +1,5 @@
 export type RuleAction = "set" | "add" | "remove";
 
-export type ApiFormat =
-  | "passthrough"
-  | "anthropicToOpenaiChat"
-  | "anthropicToOpenaiResponses"
-  | "anthropicToGemini"
-  | "responsesToOpenaiChat";
-
 export interface Rule {
   action: RuleAction;
   key: string;
@@ -24,9 +17,7 @@ export interface Endpoint {
   fixedUpstream: boolean;
   headerRules: Rule[];
   queryRules: Rule[];
-  bodyMerge: string;
   sortIndex: number;
-  apiFormat: ApiFormat;
   createdAt: number;
   updatedAt: number;
 }
@@ -88,8 +79,6 @@ export interface RequestLog {
   reqBodyBinary: boolean;
   upstreamUrl: string;
   upstreamHeaders: HeaderEntry[];
-  upstreamBodyB64: string;
-  upstreamBodyLen: number;
   statusCode?: number;
   respHeaders: HeaderEntry[];
   upstreamRespHeaders: HeaderEntry[];
@@ -97,8 +86,6 @@ export interface RequestLog {
   respBodyLen: number;
   respBodyBinary: boolean;
   respContentType?: string;
-  upstreamRespBodyB64: string;
-  upstreamRespBodyLen: number;
   durationMs: number;
   error?: string;
 }

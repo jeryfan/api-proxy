@@ -267,69 +267,29 @@ function ResponseHeadersTab({
   );
 }
 
-function RequestBodyTab({
-  log,
-  view,
-  onView,
-}: {
-  log: RequestLog;
-  view: BodyView;
-  onView: (v: BodyView) => void;
-}) {
+function RequestBodyTab({ log }: { log: RequestLog }) {
   const reqContentType = log.reqHeaders.find(
     (h) => h.key.toLowerCase() === "content-type",
   )?.value;
-  const upstreamContentType = log.upstreamHeaders.find(
-    (h) => h.key.toLowerCase() === "content-type",
-  )?.value;
-  const showToggle =
-    log.reqBodyB64 !== log.upstreamBodyB64 || log.reqBodyLen !== log.upstreamBodyLen;
   return (
     <div className="space-y-2">
-      {showToggle && (
-        <BodyViewToggle
-          value={view}
-          onChange={onView}
-          rawLabel="原始（客户端发的）"
-          transformedLabel="转换后（发往上游的）"
-        />
-      )}
       <BodyView
-        b64={view === "raw" ? log.reqBodyB64 : log.upstreamBodyB64}
+        b64={log.reqBodyB64}
         binary={log.reqBodyBinary}
-        len={view === "raw" ? log.reqBodyLen : log.upstreamBodyLen}
-        contentType={view === "raw" ? reqContentType : upstreamContentType}
+        len={log.reqBodyLen}
+        contentType={reqContentType}
       />
     </div>
   );
 }
 
-function ResponseBodyTab({
-  log,
-  view,
-  onView,
-}: {
-  log: RequestLog;
-  view: BodyView;
-  onView: (v: BodyView) => void;
-}) {
-  const showToggle =
-    log.upstreamRespBodyB64 !== log.respBodyB64 ||
-    log.upstreamRespBodyLen !== log.respBodyLen;
+function ResponseBodyTab({ log }: { log: RequestLog }) {
   return (
     <div className="space-y-2">
-      {showToggle && (
-        <BodyViewToggle
-          value={view}
-          onChange={onView}
-          rawLabel="原始（上游返回的）"
-          transformedLabel="转换后（返回给客户端的）"
-        />
-      )}
       <BodyView
-        b64={view === "raw" ? log.upstreamRespBodyB64 : log.respBodyB64}
+        b64={log.respBodyB64}
         binary={log.respBodyBinary}
-        len={view === "raw" ? log.upstreamRespBodyLen : log.respBodyLen}
+        len={log.respBodyLen}
         contentType={log.respContentType}
       />
     </div>
@@ -461,8 +421,6 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
   const [tab, setTab] = React.useState<Tab>("reqHeaders");
   const [reqHeadersView, setReqHeadersView] = React.useState<BodyView>("raw");
   const [respHeadersView, setRespHeadersView] = React.useState<BodyView>("raw");
-  const [reqBodyView, setReqBodyView] = React.useState<BodyView>("raw");
-  const [respBodyView, setRespBodyView] = React.useState<BodyView>("raw");
   const [loading, setLoading] = React.useState(false);
 
   const refresh = React.useCallback(async () => {
@@ -664,13 +622,7 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                     onView={setReqHeadersView}
                   />
                 )}
-                {tab === "reqBody" && (
-                  <RequestBodyTab
-                    log={selected}
-                    view={reqBodyView}
-                    onView={setReqBodyView}
-                  />
-                )}
+                {tab === "reqBody" && <RequestBodyTab log={selected} />}
                 {tab === "respHeaders" && (
                   <ResponseHeadersTab
                     log={selected}
@@ -678,13 +630,7 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                     onView={setRespHeadersView}
                   />
                 )}
-                {tab === "respBody" && (
-                  <ResponseBodyTab
-                    log={selected}
-                    view={respBodyView}
-                    onView={setRespBodyView}
-                  />
-                )}
+                {tab === "respBody" && <ResponseBodyTab log={selected} />}
               </div>
             </>
           )}

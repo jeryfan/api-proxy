@@ -9,8 +9,6 @@ use url::Url;
 pub enum TransformError {
     #[error("无法解析上游 URL：{0}")]
     InvalidUpstream(String),
-    #[error("请求体不是合法 JSON：{0}")]
-    InvalidJsonBody(String),
     #[error("非法 header：{0}")]
     InvalidHeader(String),
 }
@@ -153,34 +151,6 @@ pub fn strip_hop_by_hop(headers: &mut HeaderMap) {
     }
 }
 
-/// JSON 深合并：对象字段递归合并，其余类型 patch 覆盖
-pub fn merge_json_body(
-    original: &[u8],
-    patch: &serde_json::Value,
-) -> Result<Vec<u8>, TransformError> {
-    if original.is_empty() {
-        return Ok(serde_json::to_vec(patch).unwrap());
-    }
-    let mut base: serde_json::Value = serde_json::from_slice(original)
-        .map_err(|e| TransformError::InvalidJsonBody(e.to_string()))?;
-    deep_merge(&mut base, patch);
-    Ok(serde_json::to_vec(&base).unwrap())
-}
-
-fn deep_merge(target: &mut serde_json::Value, patch: &serde_json::Value) {
-    use serde_json::Value::*;
-    match (target, patch) {
-        (Object(a), Object(b)) => {
-            for (k, v) in b {
-                deep_merge(a.entry(k.clone()).or_insert(Null), v);
-            }
-        }
-        (slot, other) => {
-            *slot = other.clone();
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -198,9 +168,7 @@ mod tests {
             fixed_upstream: false,
             header_rules: vec![],
             query_rules: vec![],
-            body_merge: "".into(),
             sort_index: 0,
-            api_format: crate::proxy::format::ApiFormat::Passthrough,
             created_at: 0,
             updated_at: 0,
         }
@@ -362,29 +330,5 @@ mod tests {
         assert!(h.get("x-custom").is_none());
         assert!(h.get("host").is_none());
         assert_eq!(h.get("x-keep").unwrap(), "yes");
-    }
-
-    #[test]
-    fn merge_json_object_deep() {
-        let orig = br#"{"a":1,"b":{"c":2,"d":3}}"#;
-        let patch: serde_json::Value = serde_json::json!({"b":{"c":20},"e":5});
-        let out = merge_json_body(orig, &patch).unwrap();
-        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
-        assert_eq!(v, serde_json::json!({"a":1,"b":{"c":20,"d":3},"e":5}));
-    }
-
-    #[test]
-    fn merge_json_array_replaces() {
-        let orig = br#"{"a":[1,2,3]}"#;
-        let patch: serde_json::Value = serde_json::json!({"a":[9]});
-        let out = merge_json_body(orig, &patch).unwrap();
-        let v: serde_json::Value = serde_json::from_slice(&out).unwrap();
-        assert_eq!(v, serde_json::json!({"a":[9]}));
-    }
-
-    #[test]
-    fn merge_json_empty_body_uses_patch() {
-        let out = merge_json_body(b"", &serde_json::json!({"x":1})).unwrap();
-        assert_eq!(out, br#"{"x":1}"#);
     }
 }

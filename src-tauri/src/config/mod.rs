@@ -39,11 +39,7 @@ pub struct Endpoint {
     #[serde(default)]
     pub query_rules: Vec<Rule>,
     #[serde(default)]
-    pub body_merge: String,
-    #[serde(default)]
     pub sort_index: i32,
-    #[serde(default)]
-    pub api_format: crate::proxy::format::ApiFormat,
     pub created_at: i64,
     pub updated_at: i64,
 }
@@ -104,8 +100,6 @@ pub enum ConfigError {
     InvalidPath(String),
     #[error("上游地址无效：{0}")]
     InvalidUrl(String),
-    #[error("请求体合并必须为合法的 JSON 对象：{0}")]
-    InvalidBodyMerge(String),
     #[error("端点路径 '{path}' 与已有端点 '{conflict_with}' 冲突")]
     DuplicatePath {
         path: String,
@@ -129,7 +123,6 @@ impl Endpoint {
         self.name = self.name.trim().to_string();
         self.description = self.description.trim().to_string();
         self.upstream_url = self.upstream_url.trim().to_string();
-        self.body_merge = self.body_merge.trim().to_string();
     }
 
     pub fn validate(&self) -> Result<(), ConfigError> {
@@ -149,13 +142,6 @@ impl Endpoint {
         match Url::parse(&self.upstream_url) {
             Ok(u) if matches!(u.scheme(), "http" | "https") => {}
             _ => return Err(ConfigError::InvalidUrl(self.upstream_url.clone())),
-        }
-        if !self.body_merge.is_empty() {
-            let v: serde_json::Value = serde_json::from_str(&self.body_merge)
-                .map_err(|e| ConfigError::InvalidBodyMerge(e.to_string()))?;
-            if !v.is_object() {
-                return Err(ConfigError::InvalidBodyMerge("顶层必须为对象".into()));
-            }
         }
         Ok(())
     }
@@ -191,9 +177,7 @@ mod tests {
             fixed_upstream: false,
             header_rules: vec![],
             query_rules: vec![],
-            body_merge: "".into(),
             sort_index: 0,
-            api_format: crate::proxy::format::ApiFormat::Passthrough,
             created_at: 0,
             updated_at: 0,
         }
@@ -232,15 +216,6 @@ mod tests {
         let mut e = ep("/cc", true);
         e.upstream_url = "ftp://x.com".into();
         assert!(matches!(e.validate(), Err(ConfigError::InvalidUrl(_))));
-    }
-
-    #[test]
-    fn validate_body_merge_must_be_object() {
-        let mut e = ep("/cc", true);
-        e.body_merge = "[1,2]".into();
-        assert!(matches!(e.validate(), Err(ConfigError::InvalidBodyMerge(_))));
-        e.body_merge = "{\"a\":1}".into();
-        assert!(e.validate().is_ok());
     }
 
     #[test]

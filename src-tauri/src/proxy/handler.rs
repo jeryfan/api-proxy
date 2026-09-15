@@ -18,7 +18,6 @@ use tracing::error;
 
 use crate::config::Endpoint;
 use crate::events;
-use crate::proxy::format::{self, ApiFormat};
 use crate::proxy::log_store::{
     encode_body, is_binary_content_type, HeaderEntry, LogStore, RequestLog,
 };
@@ -72,8 +71,6 @@ fn make_log_skeleton(
         req_body_binary: false,
         upstream_url: endpoint.upstream_url.clone(),
         upstream_headers: vec![],
-        upstream_body_b64: String::new(),
-        upstream_body_len: 0,
         status_code: None,
         resp_headers: vec![],
         upstream_resp_headers: vec![],
@@ -81,8 +78,6 @@ fn make_log_skeleton(
         resp_body_len: 0,
         resp_body_binary: false,
         resp_content_type: None,
-        upstream_resp_body_b64: String::new(),
-        upstream_resp_body_len: 0,
         duration_ms: 0,
         error: None,
     }
@@ -176,26 +171,24 @@ pub async fn proxy_handler(
         .unwrap_or(reqwest::Method::GET);
     let timeout_secs = state.timeout.load(std::sync::atomic::Ordering::Relaxed);
 
-    let mut warn_body_merge_skipped = false;
     let raw_request_body: Vec<u8>;
-    let body_data: BodyData =
-        match prepare_body(body, &mut headers, &endpoint, &mut warn_body_merge_skipped).await {
-            Ok((data, raw)) => {
-                raw_request_body = raw;
-                data
-            }
-            Err(msg) => {
-                log.error = Some(msg.clone());
-                finalize_log(&state, log, started);
-                return json_error(
-                    StatusCode::BAD_REQUEST,
-                    &msg,
-                    "BODY_PREPARE_FAILED",
-                    Some(&endpoint.path),
-                    None,
-                );
-            }
-        };
+    let body_data: BodyData = match prepare_body(body, &mut headers).await {
+        Ok((data, raw)) => {
+            raw_request_body = raw;
+            data
+        }
+        Err(msg) => {
+            log.error = Some(msg.clone());
+            finalize_log(&state, log, started);
+            return json_error(
+                StatusCode::BAD_REQUEST,
+                &msg,
+                "BODY_PREPARE_FAILED",
+                Some(&endpoint.path),
+                None,
+            );
+        }
+    };
 
     {
         let (b64, len) = encode_body(&raw_request_body);
@@ -208,51 +201,7 @@ pub async fn proxy_handler(
             .map(|h| is_binary_content_type(&h.value))
             .unwrap_or(false);
     }
-    let upstream_body_bytes: Vec<u8> = match &body_data {
-        BodyData::Empty => Vec::new(),
-        BodyData::Bytes(b) => b.clone(),
-    };
-
-    // Format conversion on the upstream-bound body.
-    let (upstream_body_bytes, body_data) = if endpoint.api_format.needs_conversion() {
-        match format::transform_request(endpoint.api_format, &upstream_body_bytes) {
-            Ok(converted) => {
-                headers.insert(
-                    http::header::CONTENT_TYPE,
-                    HeaderValue::from_static("application/json"),
-                );
-                headers.insert(
-                    http::header::CONTENT_LENGTH,
-                    HeaderValue::from_str(&converted.len().to_string()).unwrap(),
-                );
-                let data = if converted.is_empty() {
-                    BodyData::Empty
-                } else {
-                    BodyData::Bytes(converted.clone())
-                };
-                (converted, data)
-            }
-            Err(msg) => {
-                log.error = Some(msg.clone());
-                finalize_log(&state, log, started);
-                return json_error(
-                    StatusCode::BAD_REQUEST,
-                    &msg,
-                    "FORMAT_TRANSFORM_FAILED",
-                    Some(&endpoint.path),
-                    None,
-                );
-            }
-        }
-    } else {
-        (upstream_body_bytes, body_data)
-    };
-    {
-        let (b64, len) = encode_body(&upstream_body_bytes);
-        log.upstream_body_b64 = b64;
-        log.upstream_body_len = len;
-        log.upstream_headers = header_entries(&headers);
-    }
+    log.upstream_headers = header_entries(&headers);
 
     let client = crate::proxy::http_client::get();
     let mut req_builder = client
@@ -303,12 +252,6 @@ pub async fn proxy_handler(
     }
     log.upstream_resp_headers = header_entries(&resp_headers);
     transform::strip_hop_by_hop(&mut resp_headers);
-    if warn_body_merge_skipped {
-        resp_headers.insert(
-            "x-apiproxy-warn",
-            HeaderValue::from_static("body-merge-skipped"),
-        );
-    }
     log.resp_headers = header_entries(&resp_headers);
     let content_type = content_type_of(&resp_headers);
     log.resp_content_type = content_type.clone();
@@ -317,110 +260,15 @@ pub async fn proxy_handler(
         .map(|c| is_binary_content_type(c))
         .unwrap_or(false);
     log.resp_body_binary = skip_resp_body;
-    let is_sse_response = content_type
-        .as_deref()
-        .map(|c| c.contains("text/event-stream"))
-        .unwrap_or(false);
 
-    let api_format = endpoint.api_format;
-    let convert_response = api_format.needs_conversion();
-
-    // Shared buffer that captures the *raw* upstream response body (before any
-    // format conversion). For SSE conversion we tap each upstream chunk; for
-    // non-SSE we fill it after collecting bytes(); for passthrough it stays
-    // identical to resp_body and is filled in the tee loop below.
-    let raw_upstream_buf: Arc<std::sync::Mutex<Vec<u8>>> =
-        Arc::new(std::sync::Mutex::new(Vec::new()));
-
-    // Decide response stream: passthrough vs streaming-convert vs buffered-convert.
-    let response_stream: std::pin::Pin<
-        Box<dyn futures::Stream<Item = Result<Bytes, std::io::Error>> + Send>,
-    > = if !convert_response {
-        Box::pin(
-            upstream_response
-                .bytes_stream()
-                .map(|r| r.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))),
-        )
-    } else if is_sse_response {
-        // Streaming format conversion.
-        resp_headers.insert(
-            http::header::CONTENT_TYPE,
-            HeaderValue::from_static("text/event-stream"),
-        );
-        resp_headers.remove(http::header::CONTENT_LENGTH);
-        log.resp_headers = header_entries(&resp_headers);
-        log.resp_content_type = Some("text/event-stream".into());
-        let raw_tap = raw_upstream_buf.clone();
-        let tapped = upstream_response.bytes_stream().map(move |r| {
-            if let Ok(ref chunk) = r {
-                if let Ok(mut buf) = raw_tap.lock() {
-                    buf.extend_from_slice(chunk);
-                }
-            }
-            r
-        });
-        crate::proxy::format::wrap_response_stream(api_format, tapped)
-    } else {
-        // Non-SSE: buffer upstream body, transform once, return as a single chunk.
-        let raw_bytes = match upstream_response.bytes().await {
-            Ok(b) => b.to_vec(),
-            Err(e) => {
-                log.error = Some(format!("upstream stream error: {e}"));
-                finalize_log(&state, log, started);
-                return json_error(
-                    StatusCode::BAD_GATEWAY,
-                    &e.to_string(),
-                    "UPSTREAM_ERROR",
-                    Some(&endpoint.path),
-                    Some(&endpoint.upstream_url),
-                );
-            }
-        };
-        // Save raw upstream body regardless of transform outcome.
-        if let Ok(mut buf) = raw_upstream_buf.lock() {
-            *buf = raw_bytes.clone();
-        }
-        let converted = match crate::proxy::format::transform_response_json(api_format, &raw_bytes)
-        {
-            Ok(b) => b,
-            Err(msg) => {
-                if !skip_resp_body {
-                    let (b64, len) = encode_body(&raw_bytes);
-                    log.upstream_resp_body_b64 = b64.clone();
-                    log.upstream_resp_body_len = len;
-                    log.resp_body_b64 = b64;
-                    log.resp_body_len = len;
-                }
-                log.error = Some(format!("response transform failed: {msg}"));
-                finalize_log(&state, log, started);
-                return json_error(
-                    StatusCode::BAD_GATEWAY,
-                    &msg,
-                    "RESP_TRANSFORM_FAILED",
-                    Some(&endpoint.path),
-                    Some(&endpoint.upstream_url),
-                );
-            }
-        };
-        if let Ok(v) = HeaderValue::from_str(&converted.len().to_string()) {
-            resp_headers.insert(http::header::CONTENT_LENGTH, v);
-        }
-        resp_headers.insert(
-            http::header::CONTENT_TYPE,
-            HeaderValue::from_static("application/json"),
-        );
-        log.resp_headers = header_entries(&resp_headers);
-        log.resp_content_type = Some("application/json".into());
-        let chunk = Bytes::from(converted);
-        Box::pin(futures::stream::once(async move { Ok(chunk) }))
-    };
+    let mut upstream_stream = upstream_response.bytes_stream().map(|r| {
+        r.map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))
+    });
 
     let (tx, rx) = mpsc::channel::<Result<Bytes, std::io::Error>>(16);
     let log_state = state.clone();
     let log_started = started;
     let mut prelog = log;
-    let mut upstream_stream = response_stream;
-    let raw_buf_for_log = raw_upstream_buf.clone();
 
     tokio::spawn(async move {
         let mut buf: Vec<u8> = Vec::new();
@@ -449,21 +297,6 @@ pub async fn proxy_handler(
             let (b64, len) = encode_body(&buf);
             prelog.resp_body_b64 = b64;
             prelog.resp_body_len = len;
-            // Fill upstream_resp_body: for passthrough we never tapped, so
-            // copy from the same buffer; for SSE conversion the tap filled it;
-            // for non-SSE conversion it was already populated earlier.
-            if prelog.upstream_resp_body_b64.is_empty() {
-                if let Ok(raw_buf) = raw_buf_for_log.lock() {
-                    if raw_buf.is_empty() {
-                        prelog.upstream_resp_body_b64 = prelog.resp_body_b64.clone();
-                        prelog.upstream_resp_body_len = prelog.resp_body_len;
-                    } else {
-                        let (rb64, rlen) = encode_body(&raw_buf);
-                        prelog.upstream_resp_body_b64 = rb64;
-                        prelog.upstream_resp_body_len = rlen;
-                    }
-                }
-            }
         }
         finalize_log(&log_state, prelog, log_started);
     });
@@ -481,56 +314,17 @@ enum BodyData {
     Bytes(Vec<u8>),
 }
 
-async fn prepare_body(
-    body: Body,
-    headers: &mut HeaderMap,
-    endpoint: &Endpoint,
-    warn: &mut bool,
-) -> Result<(BodyData, Vec<u8>), String> {
+async fn prepare_body(body: Body, headers: &mut HeaderMap) -> Result<(BodyData, Vec<u8>), String> {
     use http_body_util::BodyExt;
     let collected = body.collect().await.map_err(|e| e.to_string())?;
     let raw = collected.to_bytes().to_vec();
 
-    if endpoint.body_merge.is_empty() {
-        if raw.is_empty() {
-            return Ok((BodyData::Empty, raw));
-        }
-        headers.remove(http::header::CONTENT_LENGTH);
-        let bytes = raw.clone();
-        return Ok((BodyData::Bytes(bytes), raw));
+    if raw.is_empty() {
+        return Ok((BodyData::Empty, raw));
     }
-
-    let patch: serde_json::Value = serde_json::from_str(&endpoint.body_merge)
-        .map_err(|e| format!("body_merge 解析失败：{e}"))?;
-    let content_type = headers
-        .get(http::header::CONTENT_TYPE)
-        .and_then(|v| v.to_str().ok())
-        .unwrap_or("")
-        .to_string();
-    let is_json = content_type.contains("application/json") || raw.is_empty();
-    if !is_json {
-        *warn = true;
-        headers.remove(http::header::CONTENT_LENGTH);
-        return Ok((BodyData::Bytes(raw.clone()), raw));
-    }
-    match transform::merge_json_body(&raw, &patch) {
-        Ok(merged) => {
-            headers.insert(
-                http::header::CONTENT_TYPE,
-                HeaderValue::from_static("application/json"),
-            );
-            headers.insert(
-                http::header::CONTENT_LENGTH,
-                HeaderValue::from_str(&merged.len().to_string()).unwrap(),
-            );
-            Ok((BodyData::Bytes(merged), raw))
-        }
-        Err(_) => {
-            *warn = true;
-            headers.remove(http::header::CONTENT_LENGTH);
-            Ok((BodyData::Bytes(raw.clone()), raw))
-        }
-    }
+    // 转发时由 reqwest 重新计算 Content-Length，先移除旧的避免不一致。
+    headers.remove(http::header::CONTENT_LENGTH);
+    Ok((BodyData::Bytes(raw.clone()), raw))
 }
 
 fn reqwest_headers(src: &HeaderMap) -> reqwest::header::HeaderMap {
