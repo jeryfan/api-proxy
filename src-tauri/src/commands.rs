@@ -1,8 +1,11 @@
+use std::collections::HashMap;
+
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, State, Wry};
 
 use crate::config::{self, Endpoint, GlobalConfig, ServerStatus};
 use crate::events;
+use crate::proxy::upstream::UpstreamHealthState;
 use crate::state::AppState;
 
 #[derive(Debug, Serialize)]
@@ -11,6 +14,7 @@ pub struct InitPayload {
     pub global: GlobalConfig,
     pub endpoints: Vec<Endpoint>,
     pub status: ServerStatus,
+    pub health: HashMap<String, UpstreamHealthState>,
 }
 
 #[tauri::command]
@@ -19,6 +23,7 @@ pub fn init_data(state: State<'_, AppState>) -> InitPayload {
         global: state.store.global(),
         endpoints: state.store.endpoints(),
         status: state.manager.status(),
+        health: state.manager.health_tracker().all_states(),
     }
 }
 
@@ -36,7 +41,6 @@ pub async fn save_endpoint(
     if endpoint.id.is_empty() {
         endpoint.id = uuid::Uuid::new_v4().to_string();
         endpoint.created_at = now;
-        endpoint.updated_at = now;
         endpoints.push(endpoint.clone());
     } else {
         let pos = endpoints
@@ -44,13 +48,13 @@ pub async fn save_endpoint(
             .position(|e| e.id == endpoint.id)
             .ok_or_else(|| format!("未找到端点：{}", endpoint.id))?;
         endpoint.created_at = endpoints[pos].created_at;
-        endpoint.updated_at = now;
         endpoints[pos] = endpoint.clone();
     }
     config::validate_unique_paths(&endpoints).map_err(|e| e.to_string())?;
 
     state.store.save_endpoints(&app, endpoints.clone())?;
     state.manager.replace_routes(endpoints.clone());
+    let _ = state.manager.health_tracker().reset_endpoint(&endpoint.id);
     let _ = app.emit(events::ENDPOINTS_CHANGED, &endpoints);
     Ok(endpoint)
 }
@@ -86,7 +90,6 @@ pub fn toggle_endpoint(
         .find(|e| e.id == id)
         .ok_or_else(|| format!("未找到端点：{id}"))?;
     target.enabled = enabled;
-    target.updated_at = chrono::Utc::now().timestamp();
     config::validate_unique_paths(&endpoints).map_err(|e| e.to_string())?;
     state.store.save_endpoints(&app, endpoints.clone())?;
     state.manager.replace_routes(endpoints.clone());
@@ -195,11 +198,8 @@ pub struct ProxyTestResult {
 }
 
 #[derive(Debug, Clone, serde::Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct DetectedProxy {
     pub url: String,
-    pub proxy_type: String,
-    pub port: u16,
 }
 
 #[tauri::command]
@@ -248,7 +248,7 @@ pub async fn test_proxy_url(url: String) -> Result<ProxyTestResult, String> {
     let test_urls = [
         "https://httpbin.org/get",
         "https://www.google.com",
-        "https://api.anthropic.com",
+        "https://cloudflare.com",
     ];
 
     let mut last_error: Option<String> = None;
@@ -294,15 +294,11 @@ pub async fn scan_local_proxies() -> Vec<DetectedProxy> {
             if TcpStream::connect_timeout(&addr.into(), Duration::from_millis(150)).is_ok() {
                 found.push(DetectedProxy {
                     url: format!("{primary}://127.0.0.1:{port}"),
-                    proxy_type: primary.into(),
-                    port,
                 });
                 if is_mixed {
                     let alt = if primary == "http" { "socks5" } else { "http" };
                     found.push(DetectedProxy {
                         url: format!("{alt}://127.0.0.1:{port}"),
-                        proxy_type: alt.into(),
-                        port,
                     });
                 }
             }
@@ -325,4 +321,37 @@ pub fn list_request_logs(
 #[tauri::command]
 pub fn clear_request_logs(state: State<'_, AppState>, endpoint_id: Option<String>) {
     state.log_store.clear(endpoint_id.as_deref());
+}
+
+#[tauri::command]
+pub fn get_upstreams_health(state: State<'_, AppState>) -> HashMap<String, UpstreamHealthState> {
+    state.manager.health_tracker().all_states()
+}
+
+#[tauri::command]
+pub fn reset_upstream_health(
+    app: AppHandle<Wry>,
+    state: State<'_, AppState>,
+    endpoint_id: String,
+    upstream_id: String,
+) -> Result<UpstreamHealthState, String> {
+    let new_state = state
+        .manager
+        .health_tracker()
+        .reset(&endpoint_id, &upstream_id);
+    let _ = app.emit(events::UPSTREAM_HEALTH_CHANGED, &new_state);
+    Ok(new_state)
+}
+
+#[tauri::command]
+pub fn reset_endpoint_health(
+    app: AppHandle<Wry>,
+    state: State<'_, AppState>,
+    endpoint_id: String,
+) -> Result<Vec<UpstreamHealthState>, String> {
+    let list = state.manager.health_tracker().reset_endpoint(&endpoint_id);
+    for s in &list {
+        let _ = app.emit(events::UPSTREAM_HEALTH_CHANGED, s);
+    }
+    Ok(list)
 }

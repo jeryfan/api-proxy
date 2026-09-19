@@ -165,9 +165,6 @@ export function SettingsPanel({ open, global, onClose, onSaved }: Props) {
               max={2000}
               {...register("logBufferCapacity", { valueAsNumber: true })}
             />
-            <p className="text-xs text-muted-foreground">
-              内存环形缓冲容量。超过会按时间顺序淘汰旧记录。重启清空。
-            </p>
             {errors.logBufferCapacity && (
               <p className="text-sm text-destructive">
                 {errors.logBufferCapacity.message}
@@ -179,14 +176,9 @@ export function SettingsPanel({ open, global, onClose, onSaved }: Props) {
         <section className="rounded-xl border p-4 space-y-4">
           <Label className="text-base font-semibold">行为</Label>
           <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
-            <div>
-              <Label className="text-sm font-medium">
-                关闭窗口最小化到托盘
-              </Label>
-              <p className="text-xs text-muted-foreground">
-                关闭后只隐藏窗口，代理服务继续在后台运行
-              </p>
-            </div>
+            <Label className="text-sm font-medium">
+              关闭窗口最小化到托盘
+            </Label>
             <Controller
               control={control}
               name="closeToTray"
@@ -199,12 +191,7 @@ export function SettingsPanel({ open, global, onClose, onSaved }: Props) {
             />
           </div>
           <div className="flex items-center justify-between rounded-md border bg-muted/30 p-3">
-            <div>
-              <Label className="text-sm font-medium">启动时自动启动代理</Label>
-              <p className="text-xs text-muted-foreground">
-                打开应用后立即启动代理服务
-              </p>
-            </div>
+            <Label className="text-sm font-medium">启动时自动启动代理</Label>
             <Controller
               control={control}
               name="autoStartServer"

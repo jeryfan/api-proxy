@@ -41,7 +41,6 @@ export function AddEndpointDialog({ open, onClose, onSaved }: Props) {
                 ...values,
                 sortIndex: 0,
                 createdAt: 0,
-                updatedAt: 0,
               };
               await api.saveEndpoint(ep);
               toast.success("已保存");

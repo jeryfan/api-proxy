@@ -1,18 +1,19 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { resolve } from "node:path";
 
 export default defineConfig({
   root: "src",
   base: "./",
-  plugins: [react()],
+  plugins: [react(), tailwindcss()],
   resolve: {
-    alias: { "@": resolve(__dirname, "src") },
+    alias: { "@": resolve(import.meta.dirname, "src") },
   },
   build: {
     outDir: "../dist",
     emptyOutDir: true,
-    target: "es2020",
+    target: "es2022",
   },
   server: {
     port: 3000,

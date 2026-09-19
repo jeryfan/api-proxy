@@ -32,6 +32,17 @@ export const api = {
     invoke<RequestLog[]>("list_request_logs", { endpointId, limit }),
   clearRequestLogs: (endpointId?: string) =>
     invoke<void>("clear_request_logs", { endpointId }),
+  getUpstreamsHealth: () =>
+    invoke<Record<string, import("@/types").UpstreamHealthState>>("get_upstreams_health"),
+  resetUpstreamHealth: (endpointId: string, upstreamId: string) =>
+    invoke<import("@/types").UpstreamHealthState>("reset_upstream_health", {
+      endpointId,
+      upstreamId,
+    }),
+  resetEndpointHealth: (endpointId: string) =>
+    invoke<import("@/types").UpstreamHealthState[]>("reset_endpoint_health", {
+      endpointId,
+    }),
 };
 
 export const EVENTS = {
@@ -39,4 +50,5 @@ export const EVENTS = {
   ENDPOINTS_CHANGED: "proxy://endpoints-changed",
   CONFIG_ERROR: "proxy://config-error",
   LOG_RECORDED: "proxy://log-recorded",
+  UPSTREAM_HEALTH_CHANGED: "proxy://upstream-health-changed",
 } as const;

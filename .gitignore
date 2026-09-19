@@ -10,3 +10,4 @@ dist-ssr
 # rust
 src-tauri/target
 *.swp
+.workbuddy

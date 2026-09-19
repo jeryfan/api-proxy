@@ -9,11 +9,12 @@ import { CSS } from "@dnd-kit/utilities";
 import { EndpointCard } from "./EndpointCard";
 import { EndpointEmptyState } from "./EndpointEmptyState";
 import { useDragSort } from "@/hooks/useDragSort";
-import type { Endpoint, ServerStatus } from "@/types";
+import type { Endpoint, ServerStatus, UpstreamHealthState } from "@/types";
 
 interface Props {
   endpoints: Endpoint[];
   status: ServerStatus;
+  healthStates?: Record<string, UpstreamHealthState>;
   onEdit: (e: Endpoint) => void;
   onAdd: () => void;
   onViewLogs: (e: Endpoint) => void;
@@ -22,6 +23,7 @@ interface Props {
 export function EndpointList({
   endpoints,
   status,
+  healthStates,
   onEdit,
   onAdd,
   onViewLogs,
@@ -48,6 +50,7 @@ export function EndpointList({
               key={endpoint.id}
               endpoint={endpoint}
               serverRunning={status.running}
+              healthStates={healthStates}
               onEdit={() => onEdit(endpoint)}
               onViewLogs={() => onViewLogs(endpoint)}
             />
@@ -61,6 +64,7 @@ export function EndpointList({
 interface SortableProps {
   endpoint: Endpoint;
   serverRunning: boolean;
+  healthStates?: Record<string, UpstreamHealthState>;
   onEdit: () => void;
   onViewLogs: () => void;
 }
@@ -68,6 +72,7 @@ interface SortableProps {
 function SortableEndpointCard({
   endpoint,
   serverRunning,
+  healthStates,
   onEdit,
   onViewLogs,
 }: SortableProps) {
@@ -84,6 +89,7 @@ function SortableEndpointCard({
       <EndpointCard
         endpoint={endpoint}
         serverRunning={serverRunning}
+        healthStates={healthStates}
         onEdit={onEdit}
         onViewLogs={onViewLogs}
         dragHandleProps={{ attributes, listeners, isDragging }}

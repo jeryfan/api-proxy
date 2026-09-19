@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useTheme } from "@/components/theme-provider";
 import { api, EVENTS } from "@/lib/api";
 import { DRAG_REGION_ATTR, DRAG_REGION_STYLE, isMac } from "@/lib/platform";
-import type { Endpoint, GlobalConfig, ServerStatus } from "@/types";
+import type { Endpoint, GlobalConfig, ServerStatus, UpstreamHealthState } from "@/types";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { ServerToggle } from "@/components/ServerToggle";
@@ -24,6 +24,7 @@ const HEADER_H = 64;
 export default function App() {
   const { setTheme } = useTheme();
   const [endpoints, setEndpoints] = React.useState<Endpoint[]>([]);
+  const [healthStates, setHealthStates] = React.useState<Record<string, UpstreamHealthState>>({});
   const [global, setGlobal] = React.useState<GlobalConfig | null>(null);
   const [status, setStatus] = React.useState<ServerStatus>({ running: false });
   const [showAdd, setShowAdd] = React.useState(false);
@@ -34,6 +35,7 @@ export default function App() {
   const refresh = React.useCallback(async () => {
     const data = await api.initData();
     setEndpoints(data.endpoints);
+    setHealthStates(data.health || {});
     setGlobal(data.global);
     setStatus(data.status);
     setTheme(data.global.theme);
@@ -56,10 +58,19 @@ export default function App() {
     const unlisten3 = listen<{ message: string }>(EVENTS.CONFIG_ERROR, (e) =>
       toast.error(e.payload.message),
     );
+    const unlisten4 = listen<UpstreamHealthState>(
+      EVENTS.UPSTREAM_HEALTH_CHANGED,
+      (e) => {
+        const hs = e.payload;
+        const key = `${hs.endpointId}:${hs.upstreamId}`;
+        setHealthStates((prev) => ({ ...prev, [key]: hs }));
+      },
+    );
     return () => {
       unlisten1.then((f) => f());
       unlisten2.then((f) => f());
       unlisten3.then((f) => f());
+      unlisten4.then((f) => f());
     };
   }, []);
 
@@ -140,6 +151,7 @@ export default function App() {
         <EndpointList
           endpoints={endpoints}
           status={status}
+          healthStates={healthStates}
           onEdit={setEditing}
           onAdd={() => setShowAdd(true)}
           onViewLogs={setViewingLogs}
@@ -154,6 +166,7 @@ export default function App() {
       {editing && (
         <EditEndpointDialog
           endpoint={editing}
+          healthStates={healthStates}
           onClose={() => setEditing(null)}
           onSaved={() => setEditing(null)}
         />

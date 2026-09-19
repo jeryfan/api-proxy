@@ -229,8 +229,8 @@ function RequestHeadersTab({
         <BodyViewToggle
           value={view}
           onChange={onView}
-          rawLabel="原始（客户端发的）"
-          transformedLabel="转换后（发往上游的）"
+          rawLabel="客户端原始"
+          transformedLabel="发往上游"
         />
       )}
       <HeaderTable
@@ -256,8 +256,8 @@ function ResponseHeadersTab({
         <BodyViewToggle
           value={view}
           onChange={onView}
-          rawLabel="原始（上游返回的）"
-          transformedLabel="转换后（返回给客户端的）"
+          rawLabel="上游原始"
+          transformedLabel="返回客户端"
         />
       )}
       <HeaderTable
@@ -583,6 +583,21 @@ export function RequestLogPanel({ endpoint, onClose }: Props) {
                     <span className="font-mono">{selected.respContentType}</span>
                   )}
                 </div>
+                {selected.failoverLog.length > 0 && (
+                  <div className="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 space-y-1">
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">
+                      失败转移轨迹
+                    </p>
+                    {selected.failoverLog.map((entry, i) => (
+                      <p
+                        key={i}
+                        className="text-xs font-mono text-amber-700/90 dark:text-amber-400/90"
+                      >
+                        {entry}
+                      </p>
+                    ))}
+                  </div>
+                )}
                 {selected.error && (
                   <div className="rounded-md border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-600 dark:text-red-400">
                     {selected.error}

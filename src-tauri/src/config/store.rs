@@ -34,10 +34,6 @@ impl ConfigStore {
         })
     }
 
-    pub fn snapshot(&self) -> ConfigSnapshot {
-        self.inner.lock().unwrap().clone()
-    }
-
     pub fn global(&self) -> GlobalConfig {
         self.inner.lock().unwrap().global.clone()
     }

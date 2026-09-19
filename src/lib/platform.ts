@@ -9,7 +9,7 @@ export const isMac = (): boolean => {
   }
 };
 
-export const isWindows = (): boolean => {
+const isWindows = (): boolean => {
   try {
     const ua = navigator.userAgent || "";
     return /windows|win32|win64/i.test(ua);

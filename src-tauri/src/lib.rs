@@ -24,7 +24,6 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
-        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::init_data,
             commands::save_endpoint,
@@ -40,6 +39,9 @@ pub fn run() {
             commands::scan_local_proxies,
             commands::list_request_logs,
             commands::clear_request_logs,
+            commands::get_upstreams_health,
+            commands::reset_upstream_health,
+            commands::reset_endpoint_health,
         ])
         .setup(|app| {
             let handle = app.handle().clone();

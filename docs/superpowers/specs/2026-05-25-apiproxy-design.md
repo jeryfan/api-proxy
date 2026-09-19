@@ -7,8 +7,8 @@
 
 一个本地 Tauri 桌面工具，作为「单端口 + 路径前缀路由」的 HTTP 反向代理：
 
-- 用户在 UI 中配置端点（path → upstreamUrl），收到 `/cc/...` 请求转发到 `https://api.moonshot.com/v1/...`。
-- 支持对请求头、查询参数、JSON 请求体进行 set/add/remove 类型的修改。
+- 用户在 UI 中配置端点（path → upstreamUrl），收到请求后转发到配置的上游地址。
+- 支持对请求头、查询参数进行 set/add/remove 类型的修改，请求与响应体完全透传不修改。
 - 响应原样透传（含 SSE 流式）。
 - 类 cc-switch 视觉风格，中文界面，无多语言。
 

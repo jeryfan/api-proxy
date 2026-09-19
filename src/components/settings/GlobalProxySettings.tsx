@@ -137,12 +137,7 @@ export function GlobalProxySettings() {
 
   return (
     <section className="rounded-xl border p-4 space-y-3">
-      <div className="space-y-1">
-        <Label className="text-base font-semibold">出站代理</Label>
-        <p className="text-sm text-muted-foreground">
-          让本工具发往上游 API 的请求经由 HTTP 或 SOCKS 代理。留空表示直连。
-        </p>
-      </div>
+      <Label className="text-base font-semibold">出站代理</Label>
 
       <div className="flex gap-2">
         <Input

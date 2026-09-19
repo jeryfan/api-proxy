@@ -29,7 +29,6 @@ pub struct HeaderEntry {
 pub struct RequestLog {
     pub id: String,
     pub endpoint_id: String,
-    pub endpoint_name: String,
     pub started_at: i64,
     pub client_addr: Option<String>,
 
@@ -51,6 +50,9 @@ pub struct RequestLog {
     pub resp_body_len: usize,
     pub resp_body_binary: bool,
     pub resp_content_type: Option<String>,
+
+    /// 失败转移轨迹，每次转移一条，如 "A (https://a.com) → HTTP 503"。无转移时为空。
+    pub failover_log: Vec<String>,
 
     pub duration_ms: u64,
     pub error: Option<String>,
@@ -142,7 +144,6 @@ mod tests {
         RequestLog {
             id: id.into(),
             endpoint_id: endpoint_id.into(),
-            endpoint_name: "n".into(),
             started_at: 0,
             client_addr: None,
             req_method: "GET".into(),
@@ -161,6 +162,7 @@ mod tests {
             resp_body_len: 0,
             resp_body_binary: false,
             resp_content_type: None,
+            failover_log: vec![],
             duration_ms: 12,
             error: None,
         }

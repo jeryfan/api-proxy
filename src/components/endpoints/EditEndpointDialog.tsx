@@ -4,17 +4,18 @@ import { Button } from "@/components/ui/button";
 import { FullScreenPanel } from "@/components/common/FullScreenPanel";
 import { api } from "@/lib/api";
 import { EndpointForm } from "./forms/EndpointForm";
-import type { Endpoint } from "@/types";
+import type { Endpoint, UpstreamHealthState } from "@/types";
 
 interface Props {
   endpoint: Endpoint;
+  healthStates?: Record<string, UpstreamHealthState>;
   onClose: () => void;
   onSaved: () => void;
 }
 
 const FORM_ID = "endpoint-edit-form";
 
-export function EditEndpointDialog({ endpoint, onClose, onSaved }: Props) {
+export function EditEndpointDialog({ endpoint, healthStates, onClose, onSaved }: Props) {
   return (
     <FullScreenPanel
       open={true}
@@ -35,13 +36,21 @@ export function EditEndpointDialog({ endpoint, onClose, onSaved }: Props) {
       <EndpointForm
         initial={endpoint}
         formId={FORM_ID}
+        healthStates={healthStates}
+        onResetHealth={async (upstreamId) => {
+          try {
+            await api.resetUpstreamHealth(endpoint.id, upstreamId);
+            toast.success("已重置并恢复该上游");
+          } catch (e: unknown) {
+            toast.error(typeof e === "string" ? e : (e as Error)?.message ?? "重置失败");
+          }
+        }}
         onSubmit={async (values) => {
           try {
             const ep: Endpoint = {
               ...values,
               sortIndex: endpoint.sortIndex,
               createdAt: endpoint.createdAt,
-              updatedAt: endpoint.updatedAt,
             };
             await api.saveEndpoint(ep);
             toast.success("已保存");

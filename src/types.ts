@@ -6,20 +6,53 @@ export interface Rule {
   value: string;
 }
 
+export type BodyMatchMode = "contains" | "regex";
+
+export interface BodyMatch {
+  mode: BodyMatchMode;
+  pattern: string;
+}
+
+export interface HealthConfig {
+  enabled: boolean;
+  failureThreshold: number;
+  countConnectError: boolean;
+  statusCodes: number[];
+  bodyMatch?: BodyMatch;
+}
+
+export interface UpstreamHealthState {
+  endpointId: string;
+  upstreamId: string;
+  consecutiveFailures: number;
+  isTripped: boolean;
+  lastFailureAt?: number;
+  lastFailureReason?: string;
+}
+
+export interface Upstream {
+  id: string;
+  name: string;
+  url: string;
+  enabled: boolean;
+  weight: number;
+  headerRules: Rule[];
+  health: HealthConfig;
+}
+
 export interface Endpoint {
   id: string;
   name: string;
   description: string;
   enabled: boolean;
   path: string;
-  upstreamUrl: string;
+  upstreams: Upstream[];
   stripPrefix: boolean;
   fixedUpstream: boolean;
   headerRules: Rule[];
   queryRules: Rule[];
   sortIndex: number;
   createdAt: number;
-  updatedAt: number;
 }
 
 export interface GlobalConfig {
@@ -37,14 +70,13 @@ export interface ServerStatus {
   running: boolean;
   listenAddress?: string;
   listenPort?: number;
-  startedAt?: number;
-  lastError?: string;
 }
 
 export interface InitPayload {
   global: GlobalConfig;
   endpoints: Endpoint[];
   status: ServerStatus;
+  health: Record<string, UpstreamHealthState>;
 }
 
 export interface ProxyTestResult {
@@ -55,8 +87,6 @@ export interface ProxyTestResult {
 
 export interface DetectedProxy {
   url: string;
-  proxyType: string;
-  port: number;
 }
 
 export interface HeaderEntry {
@@ -67,7 +97,6 @@ export interface HeaderEntry {
 export interface RequestLog {
   id: string;
   endpointId: string;
-  endpointName: string;
   startedAt: number;
   clientAddr?: string;
   reqMethod: string;
@@ -79,6 +108,7 @@ export interface RequestLog {
   reqBodyBinary: boolean;
   upstreamUrl: string;
   upstreamHeaders: HeaderEntry[];
+  failoverLog: string[];
   statusCode?: number;
   respHeaders: HeaderEntry[];
   upstreamRespHeaders: HeaderEntry[];

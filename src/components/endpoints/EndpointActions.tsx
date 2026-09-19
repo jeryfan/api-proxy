@@ -45,9 +45,12 @@ export function EndpointActions({ endpoint, onEdit, onViewLogs }: Props) {
         id: "",
         name: `${endpoint.name} 副本`,
         enabled: false,
+        upstreams: endpoint.upstreams.map((u) => ({
+          ...u,
+          id: crypto.randomUUID(),
+        })),
         sortIndex: 0,
         createdAt: 0,
-        updatedAt: 0,
       });
       toast.success("已复制端点（已停用，请编辑后启用）");
     } catch (e: unknown) {

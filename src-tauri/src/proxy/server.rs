@@ -25,6 +25,7 @@ pub async fn spawn_server(
     routes: Arc<ArcSwap<Vec<Endpoint>>>,
     timeout: Arc<AtomicU64>,
     log_store: Arc<LogStore>,
+    health_tracker: crate::proxy::upstream::UpstreamHealthTracker,
     app_handle: Option<AppHandle<Wry>>,
 ) -> Result<RunningServer, String> {
     let state = ProxyState {
@@ -32,6 +33,8 @@ pub async fn spawn_server(
         timeout,
         log_store,
         app_handle,
+        cursors: crate::proxy::upstream::new_cursors(),
+        health_tracker,
     };
     let app: Router = Router::new()
         .fallback(any(proxy_handler))

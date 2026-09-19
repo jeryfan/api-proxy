@@ -23,14 +23,15 @@ pub fn match_endpoint<'a>(routes: &'a [Endpoint], req_path: &str) -> Option<&'a 
         .find(|e| req_path == e.path || req_path.starts_with(&format!("{}/", e.path)))
 }
 
-/// 构造上游 URL
+/// 构造上游 URL（base 为本次选中的上游地址）
 pub fn build_upstream_url(
+    base: &str,
     endpoint: &Endpoint,
     req_path: &str,
     req_query: Option<&str>,
 ) -> Result<Url, TransformError> {
-    let mut url = Url::parse(&endpoint.upstream_url)
-        .map_err(|e| TransformError::InvalidUpstream(e.to_string()))?;
+    let mut url =
+        Url::parse(base).map_err(|e| TransformError::InvalidUpstream(e.to_string()))?;
 
     if endpoint.fixed_upstream {
         if let Some(q) = req_query {
@@ -40,12 +41,7 @@ pub fn build_upstream_url(
     }
 
     let remaining = if endpoint.strip_prefix {
-        let stripped = req_path.strip_prefix(&endpoint.path).unwrap_or(req_path);
-        if stripped.is_empty() {
-            ""
-        } else {
-            stripped
-        }
+        req_path.strip_prefix(&endpoint.path).unwrap_or(req_path)
     } else {
         req_path
     };
@@ -163,14 +159,21 @@ mod tests {
             description: "".into(),
             enabled: true,
             path: path.into(),
-            upstream_url: upstream.into(),
+            upstreams: vec![crate::config::Upstream {
+                id: "u1".into(),
+                name: String::new(),
+                url: upstream.into(),
+                enabled: true,
+                weight: 1,
+                header_rules: vec![],
+                health: crate::config::HealthConfig::default(),
+            }],
             strip_prefix: strip,
             fixed_upstream: false,
             header_rules: vec![],
             query_rules: vec![],
             sort_index: 0,
             created_at: 0,
-            updated_at: 0,
         }
     }
 
@@ -213,28 +216,28 @@ mod tests {
     #[test]
     fn build_url_strips_prefix() {
         let e = ep("/cc", "https://api.example.com/v1", true);
-        let url = build_upstream_url(&e, "/cc/chat", None).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/cc/chat", None).unwrap();
         assert_eq!(url.as_str(), "https://api.example.com/v1/chat");
     }
 
     #[test]
     fn build_url_keeps_prefix_when_disabled() {
         let e = ep("/cc", "https://api.example.com/v1", false);
-        let url = build_upstream_url(&e, "/cc/chat", None).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/cc/chat", None).unwrap();
         assert_eq!(url.as_str(), "https://api.example.com/v1/cc/chat");
     }
 
     #[test]
     fn build_url_empty_remaining_keeps_base() {
         let e = ep("/cc", "https://api.example.com/v1", true);
-        let url = build_upstream_url(&e, "/cc", None).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/cc", None).unwrap();
         assert_eq!(url.as_str(), "https://api.example.com/v1");
     }
 
     #[test]
     fn build_url_query_passthrough() {
         let e = ep("/cc", "https://api.example.com/v1", true);
-        let url = build_upstream_url(&e, "/cc/x", Some("a=1&b=2")).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/cc/x", Some("a=1&b=2")).unwrap();
         assert_eq!(url.as_str(), "https://api.example.com/v1/x?a=1&b=2");
     }
 
@@ -242,12 +245,12 @@ mod tests {
     fn build_url_fixed_upstream_ignores_path() {
         let mut e = ep("/codex", "https://api.kimi.com/coding/v1/chat/completions", true);
         e.fixed_upstream = true;
-        let url = build_upstream_url(&e, "/codex/responses", None).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/codex/responses", None).unwrap();
         assert_eq!(
             url.as_str(),
             "https://api.kimi.com/coding/v1/chat/completions"
         );
-        let url = build_upstream_url(&e, "/codex/anything/else", None).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/codex/anything/else", None).unwrap();
         assert_eq!(
             url.as_str(),
             "https://api.kimi.com/coding/v1/chat/completions"
@@ -258,7 +261,7 @@ mod tests {
     fn build_url_fixed_upstream_keeps_query() {
         let mut e = ep("/codex", "https://api.kimi.com/coding/v1/chat/completions", true);
         e.fixed_upstream = true;
-        let url = build_upstream_url(&e, "/codex/responses", Some("stream=true")).unwrap();
+        let url = build_upstream_url(&e.upstreams[0].url, &e, "/codex/responses", Some("stream=true")).unwrap();
         assert_eq!(
             url.as_str(),
             "https://api.kimi.com/coding/v1/chat/completions?stream=true"

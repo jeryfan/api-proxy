@@ -13,21 +13,34 @@ import {
 import type { EndpointForm } from "@/lib/schemas";
 
 interface Props {
-  name: "headerRules" | "queryRules";
+  name:
+    | "headerRules"
+    | "queryRules"
+    | `upstreams.${number}.headerRules`;
   title: string;
   keyPlaceholder: string;
+  /** 紧凑模式：去掉外框和段标题样式，用于嵌套在上游卡片内。 */
+  compact?: boolean;
 }
 
-export function RulesField({ name, title, keyPlaceholder }: Props) {
+export function RulesField({ name, title, keyPlaceholder, compact }: Props) {
   const { control, register } = useFormContext<EndpointForm>();
   const { fields, append, remove } = useFieldArray({ control, name });
   return (
-    <section className="rounded-xl border p-4 space-y-3">
+    <section
+      className={compact ? "space-y-2 pt-1" : "rounded-xl border p-4 space-y-3"}
+    >
       <div className="flex items-center justify-between">
-        <Label className="text-base font-semibold">{title}</Label>
+        <Label
+          className={
+            compact ? "text-xs font-medium text-muted-foreground" : "text-base font-semibold"
+          }
+        >
+          {title}
+        </Label>
         <Button
           type="button"
-          variant="outline"
+          variant={compact ? "ghost" : "outline"}
           size="sm"
           onClick={() => append({ action: "set", key: "", value: "" })}
         >
@@ -46,7 +59,7 @@ export function RulesField({ name, title, keyPlaceholder }: Props) {
           >
             <Controller
               control={control}
-              name={`${name}.${idx}.action` as const}
+              name={`${name}.${idx}.action`}
               render={({ field: f }) => (
                 <Select value={f.value} onValueChange={f.onChange}>
                   <SelectTrigger>
@@ -62,16 +75,16 @@ export function RulesField({ name, title, keyPlaceholder }: Props) {
             />
             <Input
               placeholder={keyPlaceholder}
-              {...register(`${name}.${idx}.key` as const)}
+              {...register(`${name}.${idx}.key`)}
             />
             <Controller
               control={control}
-              name={`${name}.${idx}.action` as const}
+              name={`${name}.${idx}.action`}
               render={({ field: a }) => (
                 <Input
                   placeholder="Value"
                   disabled={a.value === "remove"}
-                  {...register(`${name}.${idx}.value` as const)}
+                  {...register(`${name}.${idx}.value`)}
                 />
               )}
             />

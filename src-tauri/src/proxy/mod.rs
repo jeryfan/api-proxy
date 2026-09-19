@@ -4,3 +4,4 @@ pub mod log_store;
 pub mod manager;
 pub mod server;
 pub mod transform;
+pub mod upstream;
